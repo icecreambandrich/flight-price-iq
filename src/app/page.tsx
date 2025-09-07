@@ -155,7 +155,7 @@ export default function Home() {
               Why Trust Our Predictions?
             </h3>
             <p className="text-lg text-gray-600">
-              Our AI analyzes multiple factors to give you the most accurate flight price predictions
+              Our AI is the only flight price predictor using machine learning with real and synthetic data to help you save money
             </p>
           </div>
           
