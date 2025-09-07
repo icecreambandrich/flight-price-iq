@@ -166,7 +166,7 @@ export default function Home() {
               </div>
               <h4 className="text-xl font-semibold text-gray-900 mb-2">Real-time Data</h4>
               <p className="text-gray-600">
-                Live pricing from Amadeus API updated daily to ensure accuracy
+                Live pricing updated daily to ensure accuracy
               </p>
             </div>
             

@@ -4,7 +4,7 @@ A Next.js web application that helps travelers decide the best time to book flig
 
 ## Features
 
-- **Real-time Flight Data**: Live pricing from Amadeus API updated daily
+- **Real-time Flight Data**: Live pricing updated daily
 - **7-Day Price Forecast**: AI-powered predictions with confidence ratings
 - **Smart Recommendations**: Clear "Buy Now" or "Wait" guidance based on probability analysis
 - **Spotlight Routes**: Featured popular routes (London-Malaysia, London-NYC, London-Denmark)
