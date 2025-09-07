@@ -186,7 +186,7 @@ export default function Home() {
               </div>
               <h4 className="text-xl font-semibold text-gray-900 mb-2">Global Coverage</h4>
               <p className="text-gray-600">
-                Support for worldwide routes with special focus on popular destinations
+                Support for worldwide routes
               </p>
             </div>
           </div>
