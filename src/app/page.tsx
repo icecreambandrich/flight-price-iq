@@ -155,7 +155,7 @@ export default function Home() {
               Why Trust Our Predictions?
             </h3>
             <p className="text-lg text-gray-600">
-              Our AI analyzes multiple factors to give you the most accurate flight price forecasts
+              Our AI analyzes multiple factors to give you the most accurate flight price predictions
             </p>
           </div>
           
@@ -201,7 +201,7 @@ export default function Home() {
               <div className="bg-blue-600 p-2 rounded-lg">
                 <Plane className="h-5 w-5 text-white" />
               </div>
-              <span className="text-lg font-semibold">Flight Price Forecast</span>
+              <span className="text-lg font-semibold">Flight Price IQ</span>
             </div>
             <p className="text-gray-400 text-sm">
               Powered by Amadeus API • Updated daily • Built with Next.js

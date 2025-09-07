@@ -1,4 +1,4 @@
-# Flight Price Forecast
+# Flight Price IQ
 
 A Next.js web application that helps travelers decide the best time to book flights using AI-powered price predictions and real-time data from the Amadeus API.
 
