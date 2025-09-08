@@ -187,7 +187,7 @@ export default function FlightSearchForm({ onSearch, loading }: FlightSearchForm
 
   return (
     <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
-      <form onSubmit={handleSubmit} className="space-y-8">
+      <form onSubmit={handleSubmit} className="space-y-6">
         {/* Flight Options */}
         <div className="flex flex-col md:flex-row gap-12">
           {/* Trip Type */}
