@@ -189,9 +189,9 @@ export default function FlightSearchForm({ onSearch, loading }: FlightSearchForm
     <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
       <form onSubmit={handleSubmit}>
         {/* Flight Options */}
-        <div className="flex flex-col md:flex-row gap-12 mb-2">
+        <div className="grid md:grid-cols-2 gap-4 mb-2">
           {/* Trip Type */}
-          <div className="flex-1">
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-3">Trip Type</label>
             <div className="flex space-x-6">
               <label className="flex items-center cursor-pointer">
@@ -220,7 +220,7 @@ export default function FlightSearchForm({ onSearch, loading }: FlightSearchForm
           </div>
 
           {/* Direct Flights Toggle */}
-          <div className="flex-1">
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-3">Flight Preference</label>
             <label className="flex items-center cursor-pointer">
               <input
