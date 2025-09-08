@@ -85,9 +85,16 @@ export default function PricePredictionCard({ prediction, route, departureDate }
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-2xl font-bold mb-1">
-              {formatPrice(prediction.currentPrice)}
+              {((prediction as any).displayPrefix || '')}{formatPrice(prediction.currentPrice)}
             </h3>
-            <p className="text-blue-100">Current best price</p>
+            <p className="text-blue-100">
+              {((prediction as any).isExact === false) ? 'Current from price' : 'Current best price'}
+            </p>
+            {typeof (prediction as any).minToday === 'number' && typeof (prediction as any).maxToday === 'number' && (
+              <p className="text-blue-100 text-xs mt-1">
+                Typical range today: {formatPrice((prediction as any).minToday)} – {formatPrice((prediction as any).maxToday)}
+              </p>
+            )}
           </div>
           <div className="text-right">
             <p className="text-sm text-blue-100">Updated</p>

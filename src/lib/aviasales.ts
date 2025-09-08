@@ -45,6 +45,56 @@ export class AviasalesService {
       return this.generateMockAviasalesData(params);
     }
 
+  /**
+   * Get exact-date price (or a small range) and optionally enforce direct flights.
+   * If return_date is provided, sums both legs using exact dates where possible.
+   */
+  static async getExactOrRangePrice(params: AviasalesSearchParams & { directOnly?: boolean }): Promise<{ best: number; currency: string; isExact: boolean; min?: number; max?: number; basis: 'exact' | 'month' } | null> {
+    const departureDate = new Date(params.departure_date);
+    const depMonthStr = `${departureDate.getFullYear()}-${String(departureDate.getMonth() + 1).padStart(2, '0')}`;
+    const originCity = this.convertAirportToCity(params.origin);
+    const destinationCity = this.convertAirportToCity(params.destination);
+
+    const fetchLeg = async (origCity: string, destCity: string, dateISO: string) => {
+      const monthStr = `${new Date(dateISO).getFullYear()}-${String(new Date(dateISO).getMonth() + 1).padStart(2, '0')}`;
+      const qs = new URLSearchParams({ origin: origCity, destination: destCity, month: monthStr, currency: params.currency, token: this.API_KEY! });
+      const url = `${this.BASE_URL}/v2/prices/month-matrix?${qs.toString()}`;
+      const res = await fetch(url, { headers: { Accept: 'application/json' } });
+      if (!res.ok) return null;
+      const json = await res.json();
+      if (!json?.data || !Array.isArray(json.data) || json.data.length === 0) return null;
+
+      const target = `${new Date(dateISO).getFullYear()}-${String(new Date(dateISO).getMonth() + 1).padStart(2, '0')}-${String(new Date(dateISO).getDate()).padStart(2, '0')}`;
+      const directFilter = (i: any) => (params.directOnly ? (i?.number_of_changes ?? 0) === 0 : true);
+      const exactItems = json.data.filter((i: any) => i?.depart_date === target && directFilter(i));
+      const pool = exactItems.length > 0 ? exactItems : json.data.filter(directFilter);
+      if (pool.length === 0) return null;
+      const sorted = pool.slice().sort((a: any, b: any) => (a.value - b.value) || (a.depart_date || '').localeCompare(b.depart_date || ''));
+      const best = sorted[0].value;
+      const isExact = exactItems.length > 0;
+      const min = Math.min(...pool.map((x: any) => x.value));
+      const max = Math.max(...pool.map((x: any) => x.value));
+      return { best, isExact, min, max };
+    };
+
+    const out = await fetchLeg(originCity, destinationCity, params.departure_date);
+    if (!out) return null;
+    if (!params.return_date) {
+      return { best: out.best, currency: params.currency, isExact: out.isExact, min: out.isExact ? undefined : out.min, max: out.isExact ? undefined : out.max, basis: out.isExact ? 'exact' : 'month' };
+    }
+
+    const back = await fetchLeg(destinationCity, originCity, params.return_date);
+    if (!back) {
+      // One leg only; still return something
+      return { best: out.best, currency: params.currency, isExact: out.isExact, min: out.isExact ? undefined : out.min, max: out.isExact ? undefined : out.max, basis: out.isExact ? 'exact' : 'month' };
+    }
+    const best = out.best + back.best;
+    const isExact = out.isExact && back.isExact;
+    const min = isExact ? undefined : (out.min! + back.min!);
+    const max = isExact ? undefined : (out.max! + back.max!);
+    return { best, currency: params.currency, isExact, min, max, basis: isExact ? 'exact' : 'month' };
+  }
+
     try {
       // Use the month-matrix endpoint which returns real price data
       const departureDate = new Date(params.departure_date);
@@ -99,6 +149,7 @@ export class AviasalesService {
       'LHR': 'LON', // London Heathrow -> London
       'LGW': 'LON', // London Gatwick -> London
       'STN': 'LON', // London Stansted -> London
+      'LTN': 'LON', // London Luton -> London
       'JFK': 'NYC', // JFK -> New York
       'LGA': 'NYC', // LaGuardia -> New York
       'EWR': 'NYC', // Newark -> New York
@@ -113,6 +164,18 @@ export class AviasalesService {
       'DXB': 'DXB', // Dubai
       'BOS': 'BOS', // Boston
       'ACC': 'ACC'  // Kotoka International Airport -> Accra
+      ,
+      // Important multi-airport cities
+      'ARN': 'STO', // Stockholm Arlanda -> Stockholm (city)
+      'BMA': 'STO', // Stockholm Bromma -> Stockholm
+      'NRT': 'TYO', // Tokyo Narita -> Tokyo
+      'HND': 'TYO', // Tokyo Haneda -> Tokyo
+      'EZE': 'BUE', // Buenos Aires Ezeiza -> Buenos Aires
+      'AEP': 'BUE', // Buenos Aires Aeroparque -> Buenos Aires
+      'GRU': 'SAO', // Sao Paulo Guarulhos -> Sao Paulo
+      'CGH': 'SAO', // Sao Paulo Congonhas -> Sao Paulo
+      'GIG': 'RIO', // Rio de Janeiro GIG -> Rio
+      'SDU': 'RIO'  // Rio de Janeiro SDU -> Rio
     };
     
     return airportToCityMap[airportCode] || airportCode;

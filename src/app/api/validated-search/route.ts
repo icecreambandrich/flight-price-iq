@@ -89,22 +89,39 @@ export async function POST(request: NextRequest) {
 
     // Try to get real Aviasales prices first, then fallback to Skyscanner, then Amadeus
     let currentPrice = 400; // Default fallback
+    // Hints for UI display
+    let isExact: boolean = true;
+    let basis: 'exact' | 'month' = 'exact';
+    let minToday: number | undefined;
+    let maxToday: number | undefined;
     
     try {
-      // Search using Aviasales API for real prices (primary)
+      // Search using Aviasales API for real prices (primary) with exact-date or range logic
       const aviasalesParams = {
         origin,
         destination,
         departure_date: departureDate,
         return_date: returnDate,
         currency: 'GBP'
-      };
+      } as const;
 
-      const aviasalesPrice = await AviasalesService.getCheapestPrice(aviasalesParams);
-      
-      if (aviasalesPrice && aviasalesPrice > 0) {
-        currentPrice = aviasalesPrice;
-        console.log(`Using Aviasales price: £${currentPrice}`);
+      const exactOrRange = await AviasalesService.getExactOrRangePrice({
+        ...aviasalesParams,
+        directOnly: !!directFlightsOnly,
+      });
+
+      let isExact = false;
+      let basis: 'exact' | 'month' = 'month';
+      let minToday: number | undefined;
+      let maxToday: number | undefined;
+
+      if (exactOrRange && exactOrRange.best > 0) {
+        currentPrice = exactOrRange.best;
+        isExact = exactOrRange.isExact;
+        basis = exactOrRange.basis;
+        minToday = exactOrRange.min;
+        maxToday = exactOrRange.max;
+        console.log(`Using Aviasales ${isExact ? 'exact' : 'from'} price: £${currentPrice}`);
       } else {
         // Fallback to Skyscanner if Aviasales fails
         const skyscannerParams = {
@@ -170,6 +187,12 @@ export async function POST(request: NextRequest) {
         max: Math.floor(currentPrice * 1.15),
         average: Math.floor(currentPrice)
       },
+      // Display hints for UI
+      isExact: typeof isExact !== 'undefined' ? isExact : true,
+      basis: (typeof basis !== 'undefined' ? basis : 'exact') as 'exact' | 'month',
+      minToday,
+      maxToday,
+      displayPrefix: (typeof isExact !== 'undefined' && !isExact) ? 'From ' : '',
       validatedConfidence: 85,
       statisticalConfidence: {
         sampleSize: 300,
