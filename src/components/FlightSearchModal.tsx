@@ -108,42 +108,45 @@ export default function FlightSearchModal({
           {/* Trip Type */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Trip Type</label>
-            <div className="flex space-x-4">
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  value="roundtrip"
-                  checked={searchParams.tripType === 'roundtrip'}
-                  onChange={(e) => handleInputChange('tripType', e.target.value)}
-                  className="mr-2"
-                />
-                Round Trip
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  value="oneway"
-                  checked={searchParams.tripType === 'oneway'}
-                  onChange={(e) => handleInputChange('tripType', e.target.value)}
-                  className="mr-2"
-                />
-                One Way
-              </label>
-            </div>
+            <div className="flex space-x-6">
+            <label className="flex items-center cursor-pointer">
+              <input
+                type="radio"
+                value="roundtrip"
+                checked={searchParams.tripType === 'roundtrip'}
+                onChange={(e) => handleInputChange('tripType', e.target.value)}
+                className="mr-2 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm font-medium text-gray-700">Round trip</span>
+            </label>
+            <label className="flex items-center cursor-pointer">
+              <input
+                type="radio"
+                value="oneway"
+                checked={searchParams.tripType === 'oneway'}
+                onChange={(e) => handleInputChange('tripType', e.target.value)}
+                className="mr-2 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm font-medium text-gray-700">One way</span>
+            </label>
+          </div>
           </div>
 
           {/* Direct Flights Toggle */}
           <div>
-            <label className="flex items-center">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Flight Preference</label>
+            <label className="flex items-center cursor-pointer">
               <input
                 type="checkbox"
                 checked={searchParams.directFlightsOnly}
                 onChange={(e) => handleInputChange('directFlightsOnly', e.target.checked)}
-                className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="mr-3 h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
               />
-              <span className="text-sm font-medium text-gray-700">Direct flights only</span>
+              <div className="flex flex-col">
+                <span className="text-sm font-medium text-gray-700">Direct flights only</span>
+                <span className="text-xs text-gray-500">Show only non-stop flights without connections</span>
+              </div>
             </label>
-            <p className="text-xs text-gray-500 mt-1">Show only non-stop flights without connections</p>
           </div>
 
           {/* Origin and Destination */}

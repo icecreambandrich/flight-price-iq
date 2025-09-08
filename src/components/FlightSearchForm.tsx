@@ -189,12 +189,12 @@ export default function FlightSearchForm({ onSearch, loading }: FlightSearchForm
     <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Flight Options */}
-        <div className="flex flex-col md:flex-row gap-4">
+        <div className="flex flex-col md:flex-row gap-8">
           {/* Trip Type */}
-          <div className="flex-1 bg-gray-50 p-4 rounded-lg border border-gray-200">
+          <div className="flex-1">
             <label className="block text-sm font-medium text-gray-700 mb-3">Trip Type</label>
-            <div className="flex space-x-4">
-              <label className="flex items-center cursor-pointer hover:bg-white px-3 py-2 rounded-md transition-colors">
+            <div className="flex space-x-6">
+              <label className="flex items-center cursor-pointer">
                 <input
                   type="radio"
                   name="tripType"
@@ -205,7 +205,7 @@ export default function FlightSearchForm({ onSearch, loading }: FlightSearchForm
                 />
                 <span className="text-sm font-medium text-gray-700">Round trip</span>
               </label>
-              <label className="flex items-center cursor-pointer hover:bg-white px-3 py-2 rounded-md transition-colors">
+              <label className="flex items-center cursor-pointer">
                 <input
                   type="radio"
                   name="tripType"
@@ -220,9 +220,9 @@ export default function FlightSearchForm({ onSearch, loading }: FlightSearchForm
           </div>
 
           {/* Direct Flights Toggle */}
-          <div className="flex-1 bg-gray-50 p-4 rounded-lg border border-gray-200">
+          <div className="flex-1">
             <label className="block text-sm font-medium text-gray-700 mb-3">Flight Preference</label>
-            <label className="flex items-center cursor-pointer hover:bg-white px-4 py-2 rounded-md transition-colors">
+            <label className="flex items-center cursor-pointer">
               <input
                 type="checkbox"
                 checked={formData.directFlightsOnly}
