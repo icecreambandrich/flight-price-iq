@@ -30,32 +30,22 @@ export default function PricePredictionCard({ prediction, route, departureDate }
   };
 
   const handleSearchFlights = () => {
-    // Generate URL for flight booking site (using Skyscanner as example)
+    // Generate URL for Travel Payouts (WayAway) booking
     const formatDate = (dateStr: string) => {
       const date = new Date(dateStr);
-      return date.toISOString().split('T')[0].replace(/-/g, '');
+      return date.toISOString().split('T')[0];
     };
 
-    const searchParams = new URLSearchParams({
-      adults: '1',
-      children: '0',
-      infants: '0',
-      cabinclass: 'economy',
-      rtn: '1', // round trip
-      preferdirects: 'false',
-      outboundaltsenabled: 'false',
-      inboundaltsenabled: 'false'
-    });
-
-    const formattedDate = formatDate(departureDate);
+    const formattedDepartureDate = formatDate(departureDate);
     const returnDate = new Date(departureDate);
     returnDate.setDate(returnDate.getDate() + 7); // Default 7 days later
     const formattedReturnDate = formatDate(returnDate.toISOString());
 
-    const skyscannerUrl = `https://www.skyscanner.com/transport/flights/${route.origin}/${route.destination}/${formattedDate}/${formattedReturnDate}/?${searchParams.toString()}`;
+    // Travel Payouts (WayAway) URL structure
+    const wayAwayUrl = `https://wayaway.io/flights/${route.origin}${route.destination}/${formattedDepartureDate}/${formattedReturnDate}/1/0/0/E`;
     
     // Open in new tab
-    window.open(skyscannerUrl, '_blank');
+    window.open(wayAwayUrl, '_blank');
   };
 
   const getRecommendationBg = (recommendation: string) => {
