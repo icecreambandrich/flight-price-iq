@@ -110,7 +110,8 @@ export class AviasalesService {
       'LAX': 'LAX', // Los Angeles
       'SYD': 'SYD', // Sydney
       'DXB': 'DXB', // Dubai
-      'BOS': 'BOS'  // Boston
+      'BOS': 'BOS', // Boston
+      'ACC': 'ACC'  // Kotoka International Airport -> Accra
     };
     
     return airportToCityMap[airportCode] || airportCode;
@@ -285,7 +286,13 @@ export class AviasalesService {
       'LHR-SYD': 800,
       'SYD-LHR': 800,
       'LHR-DXB': 350,
-      'DXB-LHR': 350
+      'DXB-LHR': 350,
+      
+      // African routes
+      'LHR-ACC': 450,  // London to Accra
+      'ACC-LHR': 450,
+      'JFK-ACC': 650,  // New York to Accra
+      'ACC-JFK': 650
     };
 
     const routeKey = `${origin}-${destination}`;

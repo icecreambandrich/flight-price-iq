@@ -62,6 +62,7 @@ export const POPULAR_AIRPORTS: Airport[] = [
   { iataCode: 'DOH', name: 'Doha', address: { cityName: 'Doha', countryName: 'Qatar' } },
   { iataCode: 'AUH', name: 'Abu Dhabi', address: { cityName: 'Abu Dhabi', countryName: 'United Arab Emirates' } },
   { iataCode: 'CAI', name: 'Cairo', address: { cityName: 'Cairo', countryName: 'Egypt' } },
+  { iataCode: 'ACC', name: 'Kotoka International Airport', address: { cityName: 'Accra', countryName: 'Ghana' } },
   { iataCode: 'JNB', name: 'Johannesburg', address: { cityName: 'Johannesburg', countryName: 'South Africa' } },
   { iataCode: 'CPT', name: 'Cape Town', address: { cityName: 'Cape Town', countryName: 'South Africa' } },
 
