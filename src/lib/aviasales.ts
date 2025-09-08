@@ -35,88 +35,123 @@ export class AviasalesService {
    * Search for flights using Aviasales API
    */
   static async searchFlights(params: AviasalesSearchParams): Promise<AviasalesFlightOffer[]> {
+    console.log('AviasalesService.searchFlights called with:', params);
+    console.log('API_KEY available:', !!this.API_KEY);
+    console.log('API_KEY value:', this.API_KEY ? `${this.API_KEY.substring(0, 8)}...` : 'undefined');
+    
     if (!this.API_KEY) {
       console.log('No Travel Payouts API key found, using mock Aviasales data');
       return this.generateMockAviasalesData(params);
     }
 
     try {
-      // Try the calendar prices endpoint for more accurate pricing
-      const calendarParams = new URLSearchParams({
-        origin: params.origin,
-        destination: params.destination,
-        beginning_of_period: params.departure_date,
-        period_type: 'day',
-        one_way: params.return_date ? 'false' : 'true',
+      // Use the month-matrix endpoint which returns real price data
+      const departureDate = new Date(params.departure_date);
+      const monthStr = `${departureDate.getFullYear()}-${String(departureDate.getMonth() + 1).padStart(2, '0')}`;
+      
+      // Convert airport codes to city codes (Travel Payouts uses city codes)
+      const originCity = this.convertAirportToCity(params.origin);
+      const destinationCity = this.convertAirportToCity(params.destination);
+      
+      const monthParams = new URLSearchParams({
+        origin: originCity,
+        destination: destinationCity,
+        month: monthStr,
         currency: params.currency,
         token: this.API_KEY
       });
 
-      const calendarResponse = await fetch(`${this.BASE_URL}/prices/calendar?${calendarParams.toString()}`, {
+      console.log('Calling Travel Payouts Month Matrix API:', `${this.BASE_URL}/v2/prices/month-matrix?${monthParams.toString()}`);
+      
+      const monthResponse = await fetch(`${this.BASE_URL}/v2/prices/month-matrix?${monthParams.toString()}`, {
         method: 'GET',
         headers: { 'Accept': 'application/json' }
       });
 
-      if (calendarResponse.ok) {
-        const calendarData = await calendarResponse.json();
-        console.log('Calendar API response:', calendarData);
+      console.log('Month Matrix API response status:', monthResponse.status);
+      
+      if (monthResponse.ok) {
+        const monthData = await monthResponse.json();
+        console.log('Month Matrix API response data:', monthData);
         
-        if (calendarData.data && Object.keys(calendarData.data).length > 0) {
-          // Find the minimum price from calendar data
-          const prices = Object.values(calendarData.data) as any[];
-          const minPrice = Math.min(...prices.map((item: any) => item.price || item.value || Infinity));
-          
-          if (minPrice !== Infinity) {
-            return [{
-              id: 'aviasales-calendar-1',
-              price: {
-                amount: minPrice,
-                currency: params.currency
-              },
-              origin: params.origin,
-              destination: params.destination,
-              departure_date: params.departure_date,
-              return_date: params.return_date,
-              airline: 'Multiple Airlines',
-              flight_number: 'Various',
-              duration: 120,
-              transfers: 0,
-              link: this.generateBookingUrl(params)
-            }];
-          }
+        if (monthData.data && monthData.data.length > 0) {
+          // Parse the real flight data
+          return this.parseMonthMatrixResponse(monthData, params);
         }
       }
 
-      // Fallback to cheap prices endpoint
-      const cheapParams = new URLSearchParams({
-        origin: params.origin,
-        destination: params.destination,
-        depart_date: params.departure_date,
-        currency: params.currency,
-        token: this.API_KEY
-      });
-
-      if (params.return_date) {
-        cheapParams.append('return_date', params.return_date);
-      }
-
-      const cheapResponse = await fetch(`${this.BASE_URL}/prices/cheap?${cheapParams.toString()}`, {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' }
-      });
-
-      if (cheapResponse.ok) {
-        const cheapData = await cheapResponse.json();
-        console.log('Cheap prices API response:', cheapData);
-        return this.parseAviasalesResponse(cheapData, params);
-      }
-
-      throw new Error('All Aviasales API endpoints failed');
+      console.log('Travel Payouts API returned no data, falling back to mock data');
+      throw new Error('No flight data available from Travel Payouts API');
 
     } catch (error) {
       console.error('Aviasales API error:', error);
+      console.log('Falling back to mock data due to API error');
       return this.generateMockAviasalesData(params);
     }
+  }
+
+  /**
+   * Convert airport codes to city codes for Travel Payouts API
+   */
+  static convertAirportToCity(airportCode: string): string {
+    const airportToCityMap: { [key: string]: string } = {
+      'LHR': 'LON', // London Heathrow -> London
+      'LGW': 'LON', // London Gatwick -> London
+      'STN': 'LON', // London Stansted -> London
+      'JFK': 'NYC', // JFK -> New York
+      'LGA': 'NYC', // LaGuardia -> New York
+      'EWR': 'NYC', // Newark -> New York
+      'CDG': 'PAR', // Charles de Gaulle -> Paris
+      'ORY': 'PAR', // Orly -> Paris
+      'MXP': 'MIL', // Milan Malpensa -> Milan
+      'LIN': 'MIL', // Milan Linate -> Milan
+      'BCN': 'BCN', // Barcelona
+      'DUB': 'DUB', // Dublin
+      'LAX': 'LAX', // Los Angeles
+      'SYD': 'SYD', // Sydney
+      'DXB': 'DXB', // Dubai
+      'BOS': 'BOS'  // Boston
+    };
+    
+    return airportToCityMap[airportCode] || airportCode;
+  }
+
+  /**
+   * Parse Travel Payouts month matrix response
+   */
+  static parseMonthMatrixResponse(data: any, params: AviasalesSearchParams): AviasalesFlightOffer[] {
+    if (!data || !data.data || !Array.isArray(data.data)) {
+      return [];
+    }
+
+    const flights: AviasalesFlightOffer[] = [];
+    
+    // Sort by price and take the best options
+    const sortedFlights = data.data.sort((a: any, b: any) => a.value - b.value);
+    const topFlights = sortedFlights.slice(0, 5); // Take top 5 cheapest flights
+    
+    topFlights.forEach((item: any, index: number) => {
+      if (item && item.value) {
+        flights.push({
+          id: `travelpayouts-${index}`,
+          price: {
+            amount: item.value,
+            currency: params.currency
+          },
+          origin: params.origin,
+          destination: params.destination,
+          departure_date: item.depart_date || params.departure_date,
+          return_date: item.return_date || params.return_date,
+          airline: item.gate || 'Multiple Airlines',
+          flight_number: 'Various',
+          duration: item.duration || 480, // Default 8 hours for transatlantic
+          transfers: item.number_of_changes || 0,
+          link: this.generateBookingUrl(params)
+        });
+      }
+    });
+
+    return flights;
   }
 
   /**
