@@ -105,8 +105,7 @@ export default function Home() {
             Never Overpay for Flights Again
           </h2>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            Save on flights with AI-powered predictions, historical price trends <br />
-            and simple buy-or-wait signals
+            Save on flights with AI-powered predictions, historical price trends and simple buy-or-wait signals
           </p>
         </div>
 

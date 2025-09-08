@@ -11,6 +11,7 @@ interface FlightSearchParams {
   returnDate?: string;
   passengers: number;
   classOfService: string;
+  directFlightsOnly?: boolean;
 }
 
 function buildWayAwayUrl(params: FlightSearchParams): string {
@@ -25,6 +26,10 @@ function buildWayAwayUrl(params: FlightSearchParams): string {
 
   if (params.returnDate) {
     searchParams.append('return_date', params.returnDate);
+  }
+
+  if (params.directFlightsOnly) {
+    searchParams.append('nonstop', 'true');
   }
 
   return `${baseUrl}?${searchParams.toString()}`;

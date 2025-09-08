@@ -62,6 +62,7 @@ export interface FlightSearchParams {
   travelClass?: 'ECONOMY' | 'PREMIUM_ECONOMY' | 'BUSINESS' | 'FIRST';
   currencyCode?: string;
   max?: number;
+  nonStop?: boolean;
 }
 
 export interface Airport {
@@ -102,6 +103,9 @@ export class AmadeusService {
       }
       if (params.travelClass) {
         searchParams.travelClass = params.travelClass;
+      }
+      if (params.nonStop) {
+        searchParams.nonStop = params.nonStop;
       }
 
       console.log('Final search params:', searchParams);

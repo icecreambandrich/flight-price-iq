@@ -5,7 +5,7 @@ import { PricePredictionService } from '@/lib/prediction';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { origin, destination, departureDate, returnDate, passengers } = body;
+    const { origin, destination, departureDate, returnDate, passengers, directFlightsOnly } = body;
 
     // Validate required fields
     if (!origin || !destination || !departureDate) {
@@ -23,7 +23,8 @@ export async function POST(request: NextRequest) {
       returnDate,
       adults: passengers || 1,
       currencyCode: 'GBP',
-      max: 10
+      max: 10,
+      nonStop: directFlightsOnly || false
     };
 
     try {

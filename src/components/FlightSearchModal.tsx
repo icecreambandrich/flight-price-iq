@@ -19,6 +19,7 @@ interface FlightSearchParams {
   passengers: number;
   classOfService: string;
   tripType: 'roundtrip' | 'oneway';
+  directFlightsOnly: boolean;
 }
 
 export default function FlightSearchModal({ 
@@ -37,9 +38,10 @@ export default function FlightSearchModal({
     passengers: 1,
     classOfService: 'Economy',
     tripType: 'roundtrip',
+    directFlightsOnly: false,
   });
 
-  const handleInputChange = (field: keyof FlightSearchParams, value: string | number) => {
+  const handleInputChange = (field: keyof FlightSearchParams, value: string | number | boolean) => {
     setSearchParams(prev => ({
       ...prev,
       [field]: value,
@@ -61,6 +63,7 @@ export default function FlightSearchModal({
           returnDate: searchParams.tripType === 'roundtrip' ? searchParams.returnDate : undefined,
           passengers: searchParams.passengers,
           classOfService: searchParams.classOfService,
+          directFlightsOnly: searchParams.directFlightsOnly,
         }),
       });
 
@@ -127,6 +130,20 @@ export default function FlightSearchModal({
                 One Way
               </label>
             </div>
+          </div>
+
+          {/* Direct Flights Toggle */}
+          <div>
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={searchParams.directFlightsOnly}
+                onChange={(e) => handleInputChange('directFlightsOnly', e.target.checked)}
+                className="mr-3 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <span className="text-sm font-medium text-gray-700">Direct flights only</span>
+            </label>
+            <p className="text-xs text-gray-500 mt-1">Show only non-stop flights without connections</p>
           </div>
 
           {/* Origin and Destination */}
