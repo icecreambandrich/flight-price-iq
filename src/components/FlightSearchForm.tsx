@@ -189,7 +189,7 @@ export default function FlightSearchForm({ onSearch, loading }: FlightSearchForm
     <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
       <form onSubmit={handleSubmit}>
         {/* Flight Options */}
-        <div className="grid md:grid-cols-2 gap-4 mb-2">
+        <div className="grid md:grid-cols-2 gap-4 mb-6">
           {/* Trip Type */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-3">Trip Type</label>
@@ -235,7 +235,7 @@ export default function FlightSearchForm({ onSearch, loading }: FlightSearchForm
         </div>
 
         {/* Airport Selection */}
-        <div className="grid md:grid-cols-2 gap-4 mb-2">
+        <div className="grid md:grid-cols-2 gap-4 mb-6">
           <AirportSelector
             value={formData.origin}
             onChange={(code) => handleInputChange('origin', code)}
@@ -254,7 +254,7 @@ export default function FlightSearchForm({ onSearch, loading }: FlightSearchForm
         </div>
 
         {/* Date Selection */}
-        <div className="grid md:grid-cols-3 gap-4 mb-4">
+        <div className="grid md:grid-cols-3 gap-4 mb-8">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               <Calendar className="inline h-4 w-4 mr-1" />
