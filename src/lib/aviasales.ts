@@ -187,16 +187,17 @@ export class AviasalesService {
    * Generate mock Aviasales data for testing
    */
   static generateMockAviasalesData(params: AviasalesSearchParams): AviasalesFlightOffer[] {
-    // Generate realistic prices based on route distance and seasonality
+    // Generate consistent prices based on route only (no random variation)
     const basePrice = this.calculateBasePrice(params.origin, params.destination);
     const mockFlights: AviasalesFlightOffer[] = [];
 
-    // Generate 3-5 mock flights with varying prices
-    const flightCount = Math.floor(Math.random() * 3) + 3;
+    // Generate deterministic flight options with fixed price variations
+    const priceVariations = [1.0, 1.05, 1.12, 1.18, 1.25]; // Fixed variations: base, +5%, +12%, +18%, +25%
+    const airlines = ['Air Europa', 'British Airways', 'Virgin Atlantic', 'JetBlue Airways', 'American Airlines'];
+    const flightNumbers = ['UX', 'BA', 'VS', 'B6', 'AA'];
     
-    for (let i = 0; i < flightCount; i++) {
-      const priceVariation = 1 + (Math.random() - 0.5) * 0.4; // ±20% variation
-      const price = Math.round(basePrice * priceVariation);
+    for (let i = 0; i < 5; i++) {
+      const price = Math.round(basePrice * priceVariations[i]);
       
       mockFlights.push({
         id: `mock-aviasales-${i}`,
@@ -208,10 +209,10 @@ export class AviasalesService {
         destination: params.destination,
         departure_date: params.departure_date,
         return_date: params.return_date,
-        airline: ['Ryanair', 'Wizz Air', 'EasyJet', 'British Airways'][i % 4],
-        flight_number: `${['FR', 'W6', 'U2', 'BA'][i % 4]}${Math.floor(Math.random() * 9000) + 1000}`,
-        duration: 90 + Math.floor(Math.random() * 120),
-        transfers: Math.random() > 0.7 ? 1 : 0,
+        airline: airlines[i],
+        flight_number: `${flightNumbers[i]}${1000 + i * 100}`,
+        duration: 480 + (i * 30), // 8+ hours for transatlantic
+        transfers: i > 2 ? 1 : 0, // First 3 are direct, last 2 have stops
         link: this.generateBookingUrl(params)
       });
     }
