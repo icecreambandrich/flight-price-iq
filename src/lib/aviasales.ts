@@ -29,7 +29,8 @@ export interface AviasalesSearchParams {
 
 export class AviasalesService {
   private static readonly API_KEY = process.env.TRAVEL_PAYOUTS_API_KEY;
-  private static readonly BASE_URL = 'https://api.travelpayouts.com/v1';
+  // Use top-level base URL. Specific API versions are appended per-endpoint.
+  private static readonly BASE_URL = 'https://api.travelpayouts.com';
 
   /**
    * Search for flights using Aviasales API
@@ -72,7 +73,7 @@ export class AviasalesService {
       
       if (monthResponse.ok) {
         const monthData = await monthResponse.json();
-        console.log('Month Matrix API response data:', monthData);
+        console.log('Month Matrix API response received, items:', Array.isArray(monthData?.data) ? monthData.data.length : 0);
         
         if (monthData.data && monthData.data.length > 0) {
           // Parse the real flight data
@@ -127,8 +128,18 @@ export class AviasalesService {
 
     const flights: AviasalesFlightOffer[] = [];
     
-    // Sort by price and take the best options
-    const sortedFlights = data.data.sort((a: any, b: any) => a.value - b.value);
+    // Prefer exact departure date matches; fall back to cheapest within month
+    const targetDate = new Date(params.departure_date);
+    const targetStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
+
+    const items: any[] = data.data;
+    const exactMatches = items.filter((i: any) => i?.depart_date === targetStr);
+
+    const basisArray = exactMatches.length > 0 ? exactMatches : items;
+    // Sort deterministically by price then date
+    const sortedFlights = basisArray
+      .slice()
+      .sort((a: any, b: any) => (a.value - b.value) || (a.depart_date || '').localeCompare(b.depart_date || ''));
     const topFlights = sortedFlights.slice(0, 5); // Take top 5 cheapest flights
     
     topFlights.forEach((item: any, index: number) => {
