@@ -227,7 +227,7 @@ export default function FlightSearchForm({ onSearch, loading }: FlightSearchForm
                 type="checkbox"
                 checked={formData.directFlightsOnly}
                 onChange={(e) => handleInputChange('directFlightsOnly', e.target.checked)}
-                className="mr-3 h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="mr-3 h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded-full"
               />
               <div className="flex flex-col">
                 <span className="text-sm font-medium text-gray-700">Direct flights only</span>
