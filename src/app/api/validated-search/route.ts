@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { StatisticalValidator } from '@/lib/statistical-validator';
 import { ABTestingFramework } from '@/lib/ab-testing';
 import { AmadeusService } from '@/lib/amadeus';
+import { SkyscannerService } from '@/lib/skyscanner';
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,24 +20,54 @@ export async function POST(request: NextRequest) {
     // Generate user ID if not provided
     const effectiveUserId = userId || `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-    // Search flights using Amadeus API
-    const searchParams = {
-      originLocationCode: origin,
-      destinationLocationCode: destination,
-      departureDate,
-      returnDate,
-      adults: passengers || 1,
-      currencyCode: 'GBP',
-      max: 10,
-      nonStop: directFlightsOnly || false
-    };
-
-    const flightOffers = await AmadeusService.searchFlights(searchParams);
+    // Try to get real Skyscanner prices first, fallback to Amadeus
+    let currentPrice = 400; // Default fallback
     
-    // Get the cheapest price from the real flight data
-    const currentPrice = flightOffers.length > 0 
-      ? parseFloat(flightOffers[0].price.total)
-      : 400; // Fallback price if no results
+    try {
+      // Search using Skyscanner API for real prices
+      const skyscannerParams = {
+        originSkyId: SkyscannerService.getSkySkyId(origin),
+        destinationSkyId: SkyscannerService.getSkySkyId(destination),
+        originEntityId: SkyscannerService.getEntityId(origin),
+        destinationEntityId: SkyscannerService.getEntityId(destination),
+        departureDate,
+        returnDate,
+        cabinClass: 'economy' as const,
+        adults: passengers || 1,
+        sortBy: 'best' as const,
+        currency: 'GBP',
+        market: 'UK',
+        countryCode: 'GB'
+      };
+
+      const skyscannerOffers = await SkyscannerService.searchFlights(skyscannerParams);
+      
+      if (skyscannerOffers.length > 0) {
+        currentPrice = skyscannerOffers[0].price.amount;
+        console.log(`Using Skyscanner price: £${currentPrice}`);
+      } else {
+        // Fallback to Amadeus if Skyscanner fails
+        const amadeusParams = {
+          originLocationCode: origin,
+          destinationLocationCode: destination,
+          departureDate,
+          returnDate,
+          adults: passengers || 1,
+          currencyCode: 'GBP',
+          max: 10,
+          nonStop: directFlightsOnly || false
+        };
+
+        const flightOffers = await AmadeusService.searchFlights(amadeusParams);
+        currentPrice = flightOffers.length > 0 
+          ? parseFloat(flightOffers[0].price.total)
+          : 400;
+        console.log(`Using Amadeus/mock price: £${currentPrice}`);
+      }
+    } catch (error) {
+      console.error('Error fetching flight prices:', error);
+      currentPrice = 400; // Use fallback price
+    }
 
     // Create mock validated prediction
     // Create mock validated prediction (ideally this would use a real prediction model)
