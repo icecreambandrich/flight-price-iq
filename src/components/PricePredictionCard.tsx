@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import { TrendingUp, TrendingDown, CheckCircle, AlertTriangle, BarChart3, Search } from 'lucide-react';
 import PredictionDetailsModal from './PredictionDetailsModal';
-import FlightSearchModal from './FlightSearchModal';
 import { PricePrediction } from '@/lib/prediction';
 
 interface PricePredictionCardProps {
@@ -19,7 +18,6 @@ interface PricePredictionCardProps {
 
 export default function PricePredictionCard({ prediction, route, departureDate }: PricePredictionCardProps) {
   const [showDetails, setShowDetails] = useState(false);
-  const [showFlightSearch, setShowFlightSearch] = useState(false);
   const formatPrice = (price: number) => `£${price.toFixed(0)}`;
   const getConfidenceColor = (confidence: number): string => {
     if (confidence >= 80) return 'text-green-600';
@@ -29,6 +27,35 @@ export default function PricePredictionCard({ prediction, route, departureDate }
   
   const getRecommendationColor = (recommendation: string) => {
     return recommendation === 'BUY_NOW' ? 'text-green-600' : 'text-orange-600';
+  };
+
+  const handleSearchFlights = () => {
+    // Generate URL for flight booking site (using Skyscanner as example)
+    const formatDate = (dateStr: string) => {
+      const date = new Date(dateStr);
+      return date.toISOString().split('T')[0].replace(/-/g, '');
+    };
+
+    const searchParams = new URLSearchParams({
+      adults: '1',
+      children: '0',
+      infants: '0',
+      cabinclass: 'economy',
+      rtn: '1', // round trip
+      preferdirects: 'false',
+      outboundaltsenabled: 'false',
+      inboundaltsenabled: 'false'
+    });
+
+    const formattedDate = formatDate(departureDate);
+    const returnDate = new Date(departureDate);
+    returnDate.setDate(returnDate.getDate() + 7); // Default 7 days later
+    const formattedReturnDate = formatDate(returnDate.toISOString());
+
+    const skyscannerUrl = `https://www.skyscanner.com/transport/flights/${route.origin}/${route.destination}/${formattedDate}/${formattedReturnDate}/?${searchParams.toString()}`;
+    
+    // Open in new tab
+    window.open(skyscannerUrl, '_blank');
   };
 
   const getRecommendationBg = (recommendation: string) => {
@@ -185,7 +212,7 @@ export default function PricePredictionCard({ prediction, route, departureDate }
       {/* Action buttons */}
       <div className="p-6 bg-gray-50 flex space-x-3">
         <button 
-          onClick={() => setShowFlightSearch(true)}
+          onClick={handleSearchFlights}
           className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2"
         >
           <Search className="h-5 w-5" />
@@ -214,14 +241,6 @@ export default function PricePredictionCard({ prediction, route, departureDate }
         </div>
       )}
 
-      {/* Flight Search Modal */}
-      <FlightSearchModal
-        isOpen={showFlightSearch}
-        onClose={() => setShowFlightSearch(false)}
-        defaultOrigin={route.origin}
-        defaultDestination={route.destination}
-        defaultDepartureDate={departureDate}
-      />
     </div>
   );
 }
