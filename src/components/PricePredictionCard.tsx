@@ -46,8 +46,8 @@ export default function PricePredictionCard({ prediction, route, departureDate }
       returnDate.setDate(returnDate.getDate() + 7); // Default 7 days later
       const formattedReturnDate = formatDateForAviasales(returnDate.toISOString());
 
-      // Aviasales URL format: origin + ddmm + destination + ddmm + passengers
-      const travelPayoutsUrl = `https://www.aviasales.com/search/${route.origin}${formattedDepartureDate}${route.destination}${formattedReturnDate}1`;
+      // Aviasales URL format: origin + ddmm + destination + ddmm + passengers + currency
+      const travelPayoutsUrl = `https://www.aviasales.com/search/${route.origin}${formattedDepartureDate}${route.destination}${formattedReturnDate}1?currency=GBP`;
       
       console.log('Generated Travel Payouts URL:', travelPayoutsUrl);
       
