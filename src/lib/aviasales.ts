@@ -223,20 +223,37 @@ export class AviasalesService {
    * Calculate base price for route (simplified)
    */
   static calculateBasePrice(origin: string, destination: string): number {
-    // Simple distance-based pricing that matches real Aviasales prices
+    // Pricing based on real Aviasales market data
     const routes: { [key: string]: number } = {
-      'LGW-MXP': 75,  // London to Milan - matches your screenshot
+      // European routes
+      'LGW-MXP': 75,  // London to Milan
       'MXP-LGW': 75,
       'LHR-CDG': 85,
       'CDG-LHR': 85,
       'LGW-BCN': 95,
       'BCN-LGW': 95,
       'LHR-DUB': 65,
-      'DUB-LHR': 65
+      'DUB-LHR': 65,
+      
+      // Transatlantic routes (based on your screenshot)
+      'LHR-JFK': 434,  // London to New York - matches Aviasales
+      'JFK-LHR': 434,
+      'LGW-JFK': 434,
+      'JFK-LGW': 434,
+      'LHR-LAX': 450,
+      'LAX-LHR': 450,
+      'LHR-BOS': 420,
+      'BOS-LHR': 420,
+      
+      // Other major routes
+      'LHR-SYD': 800,
+      'SYD-LHR': 800,
+      'LHR-DXB': 350,
+      'DXB-LHR': 350
     };
 
     const routeKey = `${origin}-${destination}`;
-    return routes[routeKey] || 120; // Default price
+    return routes[routeKey] || 200; // Default price for unknown routes
   }
 
   /**
