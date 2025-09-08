@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { TrendingUp, TrendingDown, CheckCircle, AlertTriangle, BarChart3, Search } from 'lucide-react';
 import PredictionDetailsModal from './PredictionDetailsModal';
+import FlightSearchModal from './FlightSearchModal';
 import { PricePrediction } from '@/lib/prediction';
 
 interface PricePredictionCardProps {
@@ -18,6 +19,7 @@ interface PricePredictionCardProps {
 
 export default function PricePredictionCard({ prediction, route, departureDate }: PricePredictionCardProps) {
   const [showDetails, setShowDetails] = useState(false);
+  const [showFlightSearch, setShowFlightSearch] = useState(false);
   const formatPrice = (price: number) => `£${price.toFixed(0)}`;
   const getConfidenceColor = (confidence: number): string => {
     if (confidence >= 80) return 'text-green-600';
@@ -182,7 +184,10 @@ export default function PricePredictionCard({ prediction, route, departureDate }
 
       {/* Action buttons */}
       <div className="p-6 bg-gray-50 flex space-x-3">
-        <button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2">
+        <button 
+          onClick={() => setShowFlightSearch(true)}
+          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2"
+        >
           <Search className="h-5 w-5" />
           <span>Search Flights</span>
         </button>
@@ -208,6 +213,15 @@ export default function PricePredictionCard({ prediction, route, departureDate }
           />
         </div>
       )}
+
+      {/* Flight Search Modal */}
+      <FlightSearchModal
+        isOpen={showFlightSearch}
+        onClose={() => setShowFlightSearch(false)}
+        defaultOrigin={route.origin}
+        defaultDestination={route.destination}
+        defaultDepartureDate={departureDate}
+      />
     </div>
   );
 }
