@@ -16,6 +16,7 @@ interface SearchData {
   returnDate?: string;
   passengers: number;
   tripType: 'roundtrip' | 'oneway';
+  directFlightsOnly: boolean;
 }
 
 export default function Home() {
@@ -42,6 +43,7 @@ export default function Home() {
           departureDate: searchFormData.departureDate,
           returnDate: searchFormData.returnDate,
           passengers: searchFormData.passengers || 1,
+          directFlightsOnly: searchFormData.directFlightsOnly,
           userId: `user_${Date.now()}` // Generate unique user ID for A/B testing
         })
       });

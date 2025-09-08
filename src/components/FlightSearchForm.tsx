@@ -14,6 +14,7 @@ interface FlightSearchFormProps {
     returnDate?: string;
     passengers: number;
     tripType: 'roundtrip' | 'oneway';
+    directFlightsOnly: boolean;
   }) => void;
   loading: boolean;
 }
@@ -27,7 +28,8 @@ export default function FlightSearchForm({ onSearch, loading }: FlightSearchForm
     departureDate: '',
     returnDate: '',
     passengers: 1,
-    tripType: 'roundtrip' as 'roundtrip' | 'oneway'
+    tripType: 'roundtrip' as 'roundtrip' | 'oneway',
+    directFlightsOnly: false
   });
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
@@ -175,7 +177,7 @@ export default function FlightSearchForm({ onSearch, loading }: FlightSearchForm
     }
   };
 
-  const handleInputChange = (field: string, value: string | number) => {
+  const handleInputChange = (field: string, value: string | number | boolean) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     // Clear error when user starts typing
     if (errors[field]) {
@@ -187,29 +189,42 @@ export default function FlightSearchForm({ onSearch, loading }: FlightSearchForm
     <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Trip Type */}
-        <div className="flex space-x-4">
-          <label className="flex items-center">
-            <input
-              type="radio"
-              name="tripType"
-              value="roundtrip"
-              checked={formData.tripType === 'roundtrip'}
-              onChange={(e) => handleInputChange('tripType', e.target.value)}
-              className="mr-2 text-blue-600"
-            />
-            <span className="text-sm font-medium text-gray-700">Round trip</span>
-          </label>
-          <label className="flex items-center">
-            <input
-              type="radio"
-              name="tripType"
-              value="oneway"
-              checked={formData.tripType === 'oneway'}
-              onChange={(e) => handleInputChange('tripType', e.target.value)}
-              className="mr-2 text-blue-600"
-            />
-            <span className="text-sm font-medium text-gray-700">One way</span>
-          </label>
+        <div className="flex items-center space-x-6">
+          <div className="flex space-x-4">
+            <label className="flex items-center cursor-pointer">
+              <input
+                type="radio"
+                name="tripType"
+                value="roundtrip"
+                checked={formData.tripType === 'roundtrip'}
+                onChange={(e) => handleInputChange('tripType', e.target.value)}
+                className="mr-2 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm font-medium text-gray-700">Round trip</span>
+            </label>
+            <label className="flex items-center cursor-pointer">
+              <input
+                type="radio"
+                name="tripType"
+                value="oneway"
+                checked={formData.tripType === 'oneway'}
+                onChange={(e) => handleInputChange('tripType', e.target.value)}
+                className="mr-2 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm font-medium text-gray-700">One way</span>
+            </label>
+          </div>
+          <div className="border-l border-gray-200 pl-6">
+            <label className="flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={formData.directFlightsOnly}
+                onChange={(e) => handleInputChange('directFlightsOnly', e.target.checked)}
+                className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <span className="text-sm font-medium text-gray-700">Direct flights only</span>
+            </label>
+          </div>
         </div>
 
         {/* Airport Selection */}

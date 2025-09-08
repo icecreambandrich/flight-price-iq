@@ -1,37 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { StatisticalValidator } from '@/lib/statistical-validator';
 import { ABTestingFramework } from '@/lib/ab-testing';
-
-function getBasePriceForRoute(route: string): number {
-  const routePrices: { [key: string]: number } = {
-    'LHR-BCN': 190,    // London Heathrow to Barcelona
-    'BCN-LHR': 190,    // Barcelona to London Heathrow
-    'LGW-VIE': 220,    // London Gatwick to Vienna
-    'VIE-LGW': 220,    // Vienna to London Gatwick
-    'LGW-GLA': 120,    // London Gatwick to Glasgow
-    'GLA-LGW': 120,    // Glasgow to London Gatwick
-    'LHR-JFK': 520,    // London Heathrow to New York JFK
-    'LHR-LAX': 680,    // London Heathrow to Los Angeles
-    'LHR-MAD': 180,    // London Heathrow to Madrid Barajas
-    'LHR-CDG': 150,    // London Heathrow to Paris Charles de Gaulle
-    'LHR-DXB': 480,    // London Heathrow to Dubai International
-    'LHR-SIN': 720,    // London Heathrow to Singapore Changi
-    'LHR-NRT': 850,    // London Heathrow to Tokyo Narita
-    'LHR-SYD': 1200,   // London Heathrow to Sydney
-    'JFK-LAX': 350,    // New York JFK to Los Angeles
-    'JFK-CDG': 520,    // New York JFK to Paris Charles de Gaulle
-    'MAD-LHR': 180,    // Madrid Barajas to London Heathrow
-    'CDG-LHR': 150,    // Paris Charles de Gaulle to London Heathrow
-    'DXB-LHR': 480     // Dubai International to London Heathrow
-  };
-  
-  return routePrices[route] || 400; // Default price if route not found
-}
+import { AmadeusService } from '@/lib/amadeus';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { origin, destination, departureDate, returnDate, passengers, userId } = body;
+    const { origin, destination, departureDate, returnDate, passengers, userId, directFlightsOnly } = body;
 
     // Validate required fields
     if (!origin || !destination || !departureDate) {
@@ -44,25 +19,40 @@ export async function POST(request: NextRequest) {
     // Generate user ID if not provided
     const effectiveUserId = userId || `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-    // Generate mock flight data since Amadeus API quota is exceeded
-    const route = `${origin}-${destination}`;
-    const basePrice = getBasePriceForRoute(route);
-    const currentPrice = Math.floor(basePrice + (Math.random() - 0.5) * basePrice * 0.3);
+    // Search flights using Amadeus API
+    const searchParams = {
+      originLocationCode: origin,
+      destinationLocationCode: destination,
+      departureDate,
+      returnDate,
+      adults: passengers || 1,
+      currencyCode: 'GBP',
+      max: 10,
+      nonStop: directFlightsOnly || false
+    };
+
+    const flightOffers = await AmadeusService.searchFlights(searchParams);
+    
+    // Get the cheapest price from the real flight data
+    const currentPrice = flightOffers.length > 0 
+      ? parseFloat(flightOffers[0].price.total)
+      : 400; // Fallback price if no results
 
     // Create mock validated prediction
+    // Create mock validated prediction (ideally this would use a real prediction model)
     const validatedPrediction = {
       currentPrice,
       currency: 'GBP',
       timestamp: new Date().toISOString(),
-      probabilityIncrease: Math.random() * 0.4 + 0.3, // 30-70%
-      probabilityDecrease: Math.random() * 0.4 + 0.3, // 30-70%
-      confidence: Math.floor(Math.random() * 25) + 70, // 70-95%
+      probabilityIncrease: Math.random() * 0.4 + 0.3,
+      probabilityDecrease: Math.random() * 0.4 + 0.3,
+      confidence: Math.floor(Math.random() * 25) + 70,
       recommendation: (Math.random() > 0.5 ? 'BUY_NOW' : 'WAIT') as 'BUY_NOW' | 'WAIT',
-      historicalContext: `Based on historical data for ${route}`,
+      historicalContext: `Based on historical data for ${origin}-${destination}`,
       priceRange: {
-        min: Math.floor(basePrice * 0.8),
-        max: Math.floor(basePrice * 1.2),
-        average: basePrice
+        min: Math.floor(currentPrice * 0.85),
+        max: Math.floor(currentPrice * 1.3),
+        average: Math.floor(currentPrice * 1.1)
       },
       validatedConfidence: Math.floor(Math.random() * 15) + 75, // 75-90%
       statisticalConfidence: {
