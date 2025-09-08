@@ -142,10 +142,7 @@ export default function FlightSearchModal({
                 onChange={(e) => handleInputChange('directFlightsOnly', e.target.checked)}
                 className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded-full"
               />
-              <div className="flex flex-col">
-                <span className="text-sm font-medium text-gray-700">Direct flights only</span>
-                <span className="text-xs text-gray-500">Show only non-stop flights without connections</span>
-              </div>
+              <span className="text-sm font-medium text-gray-700">Direct flights only</span>
             </label>
           </div>
 
