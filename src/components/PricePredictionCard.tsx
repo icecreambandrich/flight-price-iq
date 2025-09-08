@@ -33,29 +33,31 @@ export default function PricePredictionCard({ prediction, route, departureDate }
     try {
       console.log('Search Flights clicked', { route, departureDate });
       
-      // Generate URL for Travel Payouts (WayAway) booking
-      const formatDate = (dateStr: string) => {
+      // Generate URL for Travel Payouts (Aviasales) booking
+      const formatDateForAviasales = (dateStr: string) => {
         const date = new Date(dateStr);
-        return date.toISOString().split('T')[0];
+        const day = date.getDate().toString().padStart(2, '0');
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        return `${day}${month}`;
       };
 
-      const formattedDepartureDate = formatDate(departureDate);
+      const formattedDepartureDate = formatDateForAviasales(departureDate);
       const returnDate = new Date(departureDate);
       returnDate.setDate(returnDate.getDate() + 7); // Default 7 days later
-      const formattedReturnDate = formatDate(returnDate.toISOString());
+      const formattedReturnDate = formatDateForAviasales(returnDate.toISOString());
 
-      // Travel Payouts (WayAway) URL structure
-      const wayAwayUrl = `https://wayaway.io/flights/${route.origin}${route.destination}/${formattedDepartureDate}/${formattedReturnDate}/1/0/0/E`;
+      // Aviasales URL format: origin + ddmm + destination + ddmm + passengers
+      const travelPayoutsUrl = `https://www.aviasales.com/search/${route.origin}${formattedDepartureDate}${route.destination}${formattedReturnDate}1`;
       
-      console.log('Generated WayAway URL:', wayAwayUrl);
+      console.log('Generated Travel Payouts URL:', travelPayoutsUrl);
       
       // Open in new tab
-      const opened = window.open(wayAwayUrl, '_blank');
+      const opened = window.open(travelPayoutsUrl, '_blank');
       
       if (!opened) {
         console.error('Popup blocked or failed to open');
         // Fallback: try to navigate in same tab
-        window.location.href = wayAwayUrl;
+        window.location.href = travelPayoutsUrl;
       }
     } catch (error) {
       console.error('Error in handleSearchFlights:', error);
