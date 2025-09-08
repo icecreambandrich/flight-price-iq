@@ -184,7 +184,7 @@ export default function PricePredictionCard({ prediction, route, departureDate }
       <div className="p-6 bg-gray-50 flex space-x-3">
         <button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2">
           <Bell className="h-5 w-5" />
-          <span>Set Price Alert</span>
+          <span>Search Flights</span>
         </button>
         <button
           onClick={() => setShowDetails(!showDetails)}
