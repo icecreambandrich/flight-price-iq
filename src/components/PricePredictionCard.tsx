@@ -30,22 +30,40 @@ export default function PricePredictionCard({ prediction, route, departureDate }
   };
 
   const handleSearchFlights = () => {
-    // Generate URL for Travel Payouts (WayAway) booking
-    const formatDate = (dateStr: string) => {
-      const date = new Date(dateStr);
-      return date.toISOString().split('T')[0];
-    };
+    try {
+      console.log('Search Flights clicked', { route, departureDate });
+      
+      // Generate URL for Travel Payouts (WayAway) booking
+      const formatDate = (dateStr: string) => {
+        const date = new Date(dateStr);
+        return date.toISOString().split('T')[0];
+      };
 
-    const formattedDepartureDate = formatDate(departureDate);
-    const returnDate = new Date(departureDate);
-    returnDate.setDate(returnDate.getDate() + 7); // Default 7 days later
-    const formattedReturnDate = formatDate(returnDate.toISOString());
+      const formattedDepartureDate = formatDate(departureDate);
+      const returnDate = new Date(departureDate);
+      returnDate.setDate(returnDate.getDate() + 7); // Default 7 days later
+      const formattedReturnDate = formatDate(returnDate.toISOString());
 
-    // Travel Payouts (WayAway) URL structure
-    const wayAwayUrl = `https://wayaway.io/flights/${route.origin}${route.destination}/${formattedDepartureDate}/${formattedReturnDate}/1/0/0/E`;
-    
-    // Open in new tab
-    window.open(wayAwayUrl, '_blank');
+      // Travel Payouts (WayAway) URL structure
+      const wayAwayUrl = `https://wayaway.io/flights/${route.origin}${route.destination}/${formattedDepartureDate}/${formattedReturnDate}/1/0/0/E`;
+      
+      console.log('Generated WayAway URL:', wayAwayUrl);
+      
+      // Open in new tab
+      const opened = window.open(wayAwayUrl, '_blank');
+      
+      if (!opened) {
+        console.error('Popup blocked or failed to open');
+        // Fallback: try to navigate in same tab
+        window.location.href = wayAwayUrl;
+      }
+    } catch (error) {
+      console.error('Error in handleSearchFlights:', error);
+      
+      // Fallback to a basic Skyscanner URL if WayAway fails
+      const fallbackUrl = `https://www.skyscanner.com/transport/flights/${route.origin}/${route.destination}`;
+      window.open(fallbackUrl, '_blank');
+    }
   };
 
   const getRecommendationBg = (recommendation: string) => {
