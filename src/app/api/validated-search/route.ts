@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
 
     // Deterministic in-memory cache (10 minutes TTL)
     type CacheEntry = { price: number; timestamp: number };
-    const CACHE_TTL_MS = 10 * 60 * 1000;
+    const CACHE_TTL_MS = 60 * 1000;
     // Module-scoped singleton cache
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const globalAny = global as any;
