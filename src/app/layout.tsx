@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Price Flight IQ",
+  title: "Flight Price IQ",
   description: "AI-powered flight price predictions and forecasting",
 };
 
