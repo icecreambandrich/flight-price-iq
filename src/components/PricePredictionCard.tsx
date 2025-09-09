@@ -14,9 +14,11 @@ interface PricePredictionCardProps {
     destinationName: string;
   };
   departureDate: string;
+  returnDate?: string;
+  passengers?: number;
 }
 
-export default function PricePredictionCard({ prediction, route, departureDate }: PricePredictionCardProps) {
+export default function PricePredictionCard({ prediction, route, departureDate, returnDate: returnDateProp, passengers }: PricePredictionCardProps) {
   const [showDetails, setShowDetails] = useState(false);
   const formatPrice = (price: number) => `£${price.toFixed(0)}`;
   const getConfidenceColor = (confidence: number): string => {
@@ -42,12 +44,18 @@ export default function PricePredictionCard({ prediction, route, departureDate }
       };
 
       const formattedDepartureDate = formatDateForAviasales(departureDate);
-      const returnDate = new Date(departureDate);
-      returnDate.setDate(returnDate.getDate() + 7); // Default 7 days later
-      const formattedReturnDate = formatDateForAviasales(returnDate.toISOString());
+      let formattedReturnDate: string;
+      if (returnDateProp) {
+        formattedReturnDate = formatDateForAviasales(returnDateProp);
+      } else {
+        const fallbackReturn = new Date(departureDate);
+        fallbackReturn.setDate(fallbackReturn.getDate() + 7); // Default 7 days later
+        formattedReturnDate = formatDateForAviasales(fallbackReturn.toISOString());
+      }
 
       // Aviasales URL format: origin + ddmm + destination + ddmm + passengers + currency
-      const travelPayoutsUrl = `https://www.aviasales.com/search/${route.origin}${formattedDepartureDate}${route.destination}${formattedReturnDate}1?currency=GBP`;
+      const pax = Math.max(1, Number(passengers || 1));
+      const travelPayoutsUrl = `https://www.aviasales.com/search/${route.origin}${formattedDepartureDate}${route.destination}${formattedReturnDate}${pax}?currency=GBP`;
       
       console.log('Generated Travel Payouts URL:', travelPayoutsUrl);
       

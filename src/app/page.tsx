@@ -138,6 +138,8 @@ export default function Home() {
                 destinationName: searchData.destinationName
               }}
               departureDate={searchData.departureDate}
+              returnDate={searchData.returnDate}
+              passengers={searchData.passengers}
             />
           </div>
         )}

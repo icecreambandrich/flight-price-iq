@@ -276,12 +276,13 @@ export class AviasalesService {
   ): Promise<{ price: number; currency: string; isExact: boolean } | null> {
     if (!this.API_KEY) return null;
 
-    const originCity = this.convertAirportToCity(params.origin);
-    const destinationCity = this.convertAirportToCity(params.destination);
+    // Use raw airport codes to match Aviasales landing page exactly
+    const originCode = params.origin;
+    const destinationCode = params.destination;
 
     const qs = new URLSearchParams({
-      origin: originCity,
-      destination: destinationCity,
+      origin: originCode,
+      destination: destinationCode,
       currency: params.currency,
       token: this.API_KEY as string,
       depart_date: params.departure_date,
