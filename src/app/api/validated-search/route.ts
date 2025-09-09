@@ -105,68 +105,82 @@ export async function POST(request: NextRequest) {
         currency: 'GBP'
       } as const;
 
-      const exactOrRange = await AviasalesService.getExactOrRangePrice({
+      // 1) Try 'cheap' endpoint first (closer to Aviasales landing page exact day)
+      const cheap = await AviasalesService.getExactPriceForDates({
         ...aviasalesParams,
         directOnly: !!directFlightsOnly,
       });
 
-      let isExact = false;
-      let basis: 'exact' | 'month' = 'month';
-      let minToday: number | undefined;
-      let maxToday: number | undefined;
-
-      if (exactOrRange && exactOrRange.best > 0) {
-        currentPrice = exactOrRange.best;
-        isExact = exactOrRange.isExact;
-        basis = exactOrRange.basis;
-        minToday = exactOrRange.min;
-        maxToday = exactOrRange.max;
-        console.log(`Using Aviasales ${isExact ? 'exact' : 'from'} price: £${currentPrice}`);
+      if (cheap && cheap.price > 0) {
+        currentPrice = cheap.price;
+        isExact = cheap.isExact;
+        basis = cheap.isExact ? 'exact' : 'month';
+        console.log(`Using Aviasales CHEAP ${isExact ? 'exact' : 'from'} price: £${currentPrice}`);
       } else {
-        // Fallback to Skyscanner if Aviasales fails
-        const skyscannerParams = {
-          originSkyId: SkyscannerService.getSkySkyId(origin),
-          destinationSkyId: SkyscannerService.getSkySkyId(destination),
-          originEntityId: SkyscannerService.getEntityId(origin),
-          destinationEntityId: SkyscannerService.getEntityId(destination),
-          departureDate,
-          returnDate,
-          cabinClass: 'economy' as const,
-          adults: passengers || 1,
-          sortBy: 'best' as const,
-          currency: 'GBP',
-          market: 'UK',
-          countryCode: 'GB'
-        };
+        // 2) Fallback to month-matrix exact-or-range
+        const exactOrRange = await AviasalesService.getExactOrRangePrice({
+          ...aviasalesParams,
+          directOnly: !!directFlightsOnly,
+        });
 
-        const skyscannerOffers = await SkyscannerService.searchFlights(skyscannerParams);
-        
-        if (skyscannerOffers.length > 0) {
-          currentPrice = skyscannerOffers[0].price.amount;
-          console.log(`Using Skyscanner price: £${currentPrice}`);
+        if (exactOrRange && exactOrRange.best > 0) {
+          currentPrice = exactOrRange.best;
+          isExact = exactOrRange.isExact;
+          basis = exactOrRange.basis;
+          minToday = exactOrRange.min;
+          maxToday = exactOrRange.max;
+          console.log(`Using Aviasales MONTH-MATRIX ${isExact ? 'exact' : 'from'} price: £${currentPrice}`);
         } else {
-          // Final fallback to Amadeus
-          const amadeusParams = {
-            originLocationCode: origin,
-            destinationLocationCode: destination,
+          // 3) Fallback to Skyscanner
+          const skyscannerParams = {
+            originSkyId: SkyscannerService.getSkySkyId(origin),
+            destinationSkyId: SkyscannerService.getSkySkyId(destination),
+            originEntityId: SkyscannerService.getEntityId(origin),
+            destinationEntityId: SkyscannerService.getEntityId(destination),
             departureDate,
             returnDate,
+            cabinClass: 'economy' as const,
             adults: passengers || 1,
-            currencyCode: 'GBP',
-            max: 10,
-            nonStop: directFlightsOnly || false
+            sortBy: 'best' as const,
+            currency: 'GBP',
+            market: 'UK',
+            countryCode: 'GB'
           };
 
-          const flightOffers = await AmadeusService.searchFlights(amadeusParams);
-          currentPrice = flightOffers.length > 0 
-            ? parseFloat(flightOffers[0].price.total)
-            : 400;
-          console.log(`Using Amadeus/mock price: £${currentPrice}`);
+          const skyscannerOffers = await SkyscannerService.searchFlights(skyscannerParams);
+          
+          if (skyscannerOffers.length > 0) {
+            currentPrice = skyscannerOffers[0].price.amount;
+            console.log(`Using Skyscanner price: £${currentPrice}`);
+          } else {
+            // 4) Final fallback to Amadeus
+            const amadeusParams = {
+              originLocationCode: origin,
+              destinationLocationCode: destination,
+              departureDate,
+              returnDate,
+              adults: passengers || 1,
+              currencyCode: 'GBP',
+              max: 10,
+              nonStop: directFlightsOnly || false
+            };
+
+            const flightOffers = await AmadeusService.searchFlights(amadeusParams);
+            currentPrice = flightOffers.length > 0 
+              ? parseFloat(flightOffers[0].price.total)
+              : 400;
+            console.log(`Using Amadeus/mock price: £${currentPrice}`);
+          }
         }
       }
     } catch (error) {
       console.error('Error fetching flight prices:', error);
       currentPrice = 400; // Use fallback price
+    }
+
+    // Small delay to mirror Aviasales search feel and avoid UI flicker
+    if (Date.now() - now < 800) {
+      await new Promise((r) => setTimeout(r, 800 - (Date.now() - now)));
     }
 
     // Store in cache

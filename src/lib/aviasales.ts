@@ -268,6 +268,82 @@ export class AviasalesService {
   }
 
   /**
+   * Get exact price for the specified dates using Travel Payouts 'v2/prices/cheap'.
+   * This tends to mirror Aviasales landing page "from" prices for the exact date pair.
+   */
+  static async getExactPriceForDates(
+    params: AviasalesSearchParams & { directOnly?: boolean }
+  ): Promise<{ price: number; currency: string; isExact: boolean } | null> {
+    if (!this.API_KEY) return null;
+
+    const originCity = this.convertAirportToCity(params.origin);
+    const destinationCity = this.convertAirportToCity(params.destination);
+
+    const qs = new URLSearchParams({
+      origin: originCity,
+      destination: destinationCity,
+      currency: params.currency,
+      token: this.API_KEY as string,
+      depart_date: params.departure_date,
+    });
+    if (params.return_date) qs.set('return_date', params.return_date);
+
+    const url = `${this.BASE_URL}/v2/prices/cheap?${qs.toString()}`;
+    const res = await fetch(url, { headers: { Accept: 'application/json' } });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const items: any[] = [];
+
+    const pushItem = (i: any) => { if (i) items.push(i); };
+
+    if (Array.isArray(json?.data)) {
+      json.data.forEach(pushItem);
+    } else if (json?.data && typeof json.data === 'object') {
+      for (const key of Object.keys(json.data)) {
+        const v = json.data[key];
+        if (Array.isArray(v)) v.forEach(pushItem);
+        else if (v && typeof v === 'object') {
+          for (const k of Object.keys(v)) pushItem(v[k]);
+        }
+      }
+    }
+
+    if (items.length === 0) return null;
+
+    const depStr = params.departure_date;
+    const retStr = params.return_date;
+    const directOnly = !!params.directOnly;
+
+    const getDep = (i: any) => (i.depart_date || i.departure_at || i.depart_at || '').toString();
+    const getRet = (i: any) => (i.return_date || i.return_at || '').toString();
+    const getTransfers = (i: any) => (i.transfers ?? i.number_of_changes ?? 0);
+    const getValue = (i: any) => (i.value ?? i.price ?? i.amount ?? (i.conversion ? (i.conversion[params.currency] || i.conversion.GBP || i.conversion.USD) : undefined));
+
+    const exactMatches = items.filter(i => {
+      const okDep = depStr ? getDep(i).startsWith(depStr) : true;
+      const okRet = retStr ? getRet(i).startsWith(retStr) : true;
+      const okDir = directOnly ? getTransfers(i) === 0 : true;
+      const val = getValue(i);
+      return okDep && okRet && okDir && typeof val === 'number';
+    });
+
+    const pool = exactMatches.length > 0 ? exactMatches : items.filter(i => {
+      const okDir = directOnly ? getTransfers(i) === 0 : true;
+      const val = getValue(i);
+      return okDir && typeof val === 'number';
+    });
+
+    if (pool.length === 0) return null;
+
+    const best = pool
+      .slice()
+      .sort((a, b) => (getValue(a) as number) - (getValue(b) as number))[0];
+    const price = getValue(best) as number;
+    const isExact = exactMatches.length > 0;
+    return { price, currency: params.currency, isExact };
+  }
+
+  /**
    * Parse Aviasales API response
    */
   static parseAviasalesResponse(data: any, params: AviasalesSearchParams): AviasalesFlightOffer[] {
