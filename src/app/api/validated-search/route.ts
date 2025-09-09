@@ -173,6 +173,38 @@ export async function POST(request: NextRequest) {
           }
         }
       }
+      // 2.5) Parity assist: some Aviasales roundtrip tiles reflect two one-ways summed.
+      // Compute sum of one-ways and take it if it's lower than currentPrice.
+      try {
+        const outOneWay = await AviasalesService.getExactPriceForDates({
+          origin,
+          destination,
+          departure_date: departureDate,
+          currency: 'GBP',
+          directOnly: !!directFlightsOnly,
+        } as any);
+        const inOneWay = returnDate ? await AviasalesService.getExactPriceForDates({
+          origin: destination,
+          destination: origin,
+          departure_date: returnDate,
+          currency: 'GBP',
+          directOnly: !!directFlightsOnly,
+        } as any) : null;
+        if (outOneWay && (!returnDate || inOneWay)) {
+          const sum = outOneWay.price + (inOneWay ? inOneWay.price : 0);
+          if (sum > 0 && sum < currentPrice) {
+            currentPrice = sum;
+            isExact = !!(outOneWay.isExact && (inOneWay ? inOneWay.isExact : true));
+            basis = 'exact';
+            minToday = undefined;
+            maxToday = undefined;
+            console.log(`Using Aviasales SUM-OF-ONE-WAYS price: £${currentPrice}`);
+          }
+        }
+      } catch (e) {
+        console.log('Sum-of-one-ways parity step skipped:', e);
+      }
+
     } catch (error) {
       console.error('Error fetching flight prices:', error);
       currentPrice = 400; // Use fallback price

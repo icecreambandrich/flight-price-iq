@@ -45,8 +45,6 @@ export class AviasalesService {
       return this.generateMockAviasalesData(params);
     }
 
-  
-
     try {
       // Use the month-matrix endpoint which returns real price data
       const departureDate = new Date(params.departure_date);
@@ -196,16 +194,18 @@ export class AviasalesService {
     basis: 'exact' | 'month';
   } | null> {
     if (!this.API_KEY) return null;
+    // Try both city-level and airport-level codes
+    const codeVariants = [
+      { o: params.origin, d: params.destination },
+      { o: this.convertAirportToCity(params.origin), d: this.convertAirportToCity(params.destination) },
+    ];
 
-    const originCity = this.convertAirportToCity(params.origin);
-    const destinationCity = this.convertAirportToCity(params.destination);
-
-    const fetchLeg = async (origCity: string, destCity: string, dateISO: string) => {
+    const fetchLeg = async (orig: string, dest: string, dateISO: string) => {
       const d = new Date(dateISO);
       const monthStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       const qs = new URLSearchParams({
-        origin: origCity,
-        destination: destCity,
+        origin: orig,
+        destination: dest,
         month: monthStr,
         currency: params.currency,
         token: this.API_KEY as string,
@@ -231,7 +231,12 @@ export class AviasalesService {
       return { best, isExact, min, max } as { best: number; isExact: boolean; min: number; max: number };
     };
 
-    const out = await fetchLeg(originCity, destinationCity, params.departure_date);
+    // Try each variant until we get data
+    let out: { best: number; isExact: boolean; min: number; max: number } | null = null;
+    for (const v of codeVariants) {
+      out = await fetchLeg(v.o, v.d, params.departure_date);
+      if (out) break;
+    }
     if (!out) return null;
     if (!params.return_date) {
       return {
@@ -244,7 +249,11 @@ export class AviasalesService {
       };
     }
 
-    const back = await fetchLeg(destinationCity, originCity, params.return_date);
+    let back: { best: number; isExact: boolean; min: number; max: number } | null = null;
+    for (const v of codeVariants) {
+      back = await fetchLeg(v.d, v.o, params.return_date);
+      if (back) break;
+    }
     if (!back) {
       return {
         best: out.best,
@@ -276,72 +285,86 @@ export class AviasalesService {
   ): Promise<{ price: number; currency: string; isExact: boolean } | null> {
     if (!this.API_KEY) return null;
 
-    // Use raw airport codes to match Aviasales landing page exactly
-    const originCode = params.origin;
-    const destinationCode = params.destination;
+    // Try both airport and city codes to match Aviasales better
+    const codeVariants = [
+      { origin: params.origin, destination: params.destination },
+      { origin: this.convertAirportToCity(params.origin), destination: this.convertAirportToCity(params.destination) },
+    ];
 
-    const qs = new URLSearchParams({
-      origin: originCode,
-      destination: destinationCode,
-      currency: params.currency,
-      token: this.API_KEY as string,
-      depart_date: params.departure_date,
-    });
-    if (params.return_date) qs.set('return_date', params.return_date);
+    const buildUrl = (version: 'v3' | 'v2', o: string, d: string) => {
+      const qs = new URLSearchParams({
+        origin: o,
+        destination: d,
+        currency: params.currency,
+        token: this.API_KEY as string,
+        depart_date: params.departure_date,
+      });
+      if (params.return_date) qs.set('return_date', params.return_date);
+      return `${this.BASE_URL}/${version}/prices/cheap?${qs.toString()}`;
+    };
 
-    const url = `${this.BASE_URL}/v2/prices/cheap?${qs.toString()}`;
-    const res = await fetch(url, { headers: { Accept: 'application/json' } });
-    if (!res.ok) return null;
-    const json = await res.json();
-    const items: any[] = [];
-
-    const pushItem = (i: any) => { if (i) items.push(i); };
-
-    if (Array.isArray(json?.data)) {
-      json.data.forEach(pushItem);
-    } else if (json?.data && typeof json.data === 'object') {
-      for (const key of Object.keys(json.data)) {
-        const v = json.data[key];
-        if (Array.isArray(v)) v.forEach(pushItem);
-        else if (v && typeof v === 'object') {
-          for (const k of Object.keys(v)) pushItem(v[k]);
+    const flatten = (json: any): any[] => {
+      const items: any[] = [];
+      const pushItem = (i: any) => { if (i) items.push(i); };
+      if (!json) return items;
+      const data = json.data;
+      if (Array.isArray(data)) {
+        data.forEach(pushItem);
+      } else if (data && typeof data === 'object') {
+        for (const k of Object.keys(data)) {
+          const v = data[k];
+          if (Array.isArray(v)) v.forEach(pushItem);
+          else if (v && typeof v === 'object') {
+            for (const kk of Object.keys(v)) pushItem(v[kk]);
+          }
         }
       }
+      return items;
+    };
+
+    const tryVersion = async (version: 'v3' | 'v2', o: string, d: string) => {
+      const url = buildUrl(version, o, d);
+      const res = await fetch(url, { headers: { Accept: 'application/json' } });
+      if (!res.ok) return null;
+      const json = await res.json();
+      const items = flatten(json);
+      if (items.length === 0) return null;
+
+      const depStr = params.departure_date;
+      const retStr = params.return_date;
+      const directOnly = !!params.directOnly;
+      const getDep = (i: any) => (i.depart_date || i.departure_at || i.depart_at || '').toString();
+      const getRet = (i: any) => (i.return_date || i.return_at || '').toString();
+      const getTransfers = (i: any) => (i.transfers ?? i.number_of_changes ?? 0);
+      const getValue = (i: any) => (i.value ?? i.price ?? i.amount ?? i.best_price ?? (i.conversion ? (i.conversion[params.currency] || i.conversion.GBP || i.conversion.USD) : undefined));
+
+      const exactMatches = items.filter(i => {
+        const okDep = depStr ? getDep(i).includes(depStr) : true;
+        const okRet = retStr ? getRet(i).includes(retStr) : true;
+        const okDir = directOnly ? getTransfers(i) === 0 : true;
+        const val = getValue(i);
+        return okDep && okRet && okDir && typeof val === 'number';
+      });
+      const pool = exactMatches.length > 0 ? exactMatches : items.filter(i => {
+        const okDir = directOnly ? getTransfers(i) === 0 : true;
+        const val = getValue(i);
+        return okDir && typeof val === 'number';
+      });
+      if (pool.length === 0) return null;
+      const best = pool.slice().sort((a, b) => (getValue(a) as number) - (getValue(b) as number))[0];
+      const price = getValue(best) as number;
+      const isExact = exactMatches.length > 0;
+      return { price, currency: params.currency, isExact } as { price: number; currency: string; isExact: boolean };
+    };
+
+    // Try v3 then v2 across code variants
+    for (const variant of codeVariants) {
+      const v3 = await tryVersion('v3', variant.origin, variant.destination);
+      if (v3) return v3;
+      const v2 = await tryVersion('v2', variant.origin, variant.destination);
+      if (v2) return v2;
     }
-
-    if (items.length === 0) return null;
-
-    const depStr = params.departure_date;
-    const retStr = params.return_date;
-    const directOnly = !!params.directOnly;
-
-    const getDep = (i: any) => (i.depart_date || i.departure_at || i.depart_at || '').toString();
-    const getRet = (i: any) => (i.return_date || i.return_at || '').toString();
-    const getTransfers = (i: any) => (i.transfers ?? i.number_of_changes ?? 0);
-    const getValue = (i: any) => (i.value ?? i.price ?? i.amount ?? (i.conversion ? (i.conversion[params.currency] || i.conversion.GBP || i.conversion.USD) : undefined));
-
-    const exactMatches = items.filter(i => {
-      const okDep = depStr ? getDep(i).startsWith(depStr) : true;
-      const okRet = retStr ? getRet(i).startsWith(retStr) : true;
-      const okDir = directOnly ? getTransfers(i) === 0 : true;
-      const val = getValue(i);
-      return okDep && okRet && okDir && typeof val === 'number';
-    });
-
-    const pool = exactMatches.length > 0 ? exactMatches : items.filter(i => {
-      const okDir = directOnly ? getTransfers(i) === 0 : true;
-      const val = getValue(i);
-      return okDir && typeof val === 'number';
-    });
-
-    if (pool.length === 0) return null;
-
-    const best = pool
-      .slice()
-      .sort((a, b) => (getValue(a) as number) - (getValue(b) as number))[0];
-    const price = getValue(best) as number;
-    const isExact = exactMatches.length > 0;
-    return { price, currency: params.currency, isExact };
+    return null;
   }
 
   /**
