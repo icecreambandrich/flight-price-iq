@@ -171,21 +171,28 @@ export class SkyscannerService {
    * Generate mock Skyscanner-style data when API is not available
    */
   private static generateMockSkyscannerData(params: SkyscannerSearchParams): SkyscannerFlightOffer[] {
-    const basePrice = Math.floor(Math.random() * 400) + 200;
+    // Use deterministic base price calculation for consistency
+    const basePrice = this.calculateBasePrice(params.originSkyId, params.destinationSkyId);
     const airlines = [
       { id: 'BA', name: 'British Airways' },
       { id: 'LH', name: 'Lufthansa' },
       { id: 'AF', name: 'Air France' },
       { id: 'KL', name: 'KLM' },
-      { id: 'VS', name: 'Virgin Atlantic' }
+      { id: 'VS', name: 'Virgin Atlantic' },
+      { id: 'EK', name: 'Emirates' },
+      { id: 'QR', name: 'Qatar Airways' },
+      { id: 'TK', name: 'Turkish Airlines' },
+      { id: 'SQ', name: 'Singapore Airlines' },
+      { id: 'CX', name: 'Cathay Pacific' }
     ];
 
     const mockFlights: SkyscannerFlightOffer[] = [];
+    // Generate more flights for better average calculation
+    const priceVariations = [1.0, 1.08, 1.15, 1.22, 1.30, 1.38, 1.45, 1.52, 1.60, 1.70];
 
-    for (let i = 0; i < 5; i++) {
-      const airline = airlines[Math.floor(Math.random() * airlines.length)];
-      const priceVariation = Math.floor(Math.random() * 200) - 100;
-      const totalPrice = Math.max(150, basePrice + priceVariation);
+    for (let i = 0; i < 10; i++) {
+      const airline = airlines[i % airlines.length];
+      const totalPrice = Math.round(basePrice * priceVariations[i]);
 
       mockFlights.push({
         id: `mock_skyscanner_${i + 1}`,
@@ -202,11 +209,11 @@ export class SkyscannerService {
             id: params.destinationSkyId,
             name: params.destinationSkyId
           },
-          departure: `${params.departureDate}T${(Math.floor(Math.random() * 16) + 6).toString().padStart(2, '0')}:00:00`,
-          arrival: `${params.departureDate}T${(Math.floor(Math.random() * 16) + 8).toString().padStart(2, '0')}:00:00`,
-          duration: Math.floor(Math.random() * 480) + 60, // 1-8 hours
+          departure: `${params.departureDate}T${(6 + i).toString().padStart(2, '0')}:00:00`,
+          arrival: `${params.departureDate}T${(8 + i + Math.floor(i/2)).toString().padStart(2, '0')}:00:00`,
+          duration: 120 + (i * 30), // Varying durations
           carriers: [airline],
-          segments: Math.random() > 0.7 ? 2 : 1 // 30% chance of connecting flight
+          segments: i > 6 ? 2 : 1 // Last 3 have connections
         }],
         deeplink: `https://wayaway.io/flights/${params.originSkyId}${params.destinationSkyId}/${params.departureDate}/${params.returnDate || params.departureDate}/1/0/0/E`
       });
@@ -262,5 +269,69 @@ export class SkyscannerService {
     };
     
     return mapping[iataCode] || '27544008'; // Default to LHR
+  }
+
+  /**
+   * Calculate base price for route (similar to Aviasales)
+   */
+  private static calculateBasePrice(origin: string, destination: string): number {
+    const routes: { [key: string]: number } = {
+      // European routes
+      'LGW-MXP': 85, 'MXP-LGW': 85,
+      'LHR-CDG': 95, 'CDG-LHR': 95,
+      'LGW-BCN': 105, 'BCN-LGW': 105,
+      'LHR-DUB': 75, 'DUB-LHR': 75,
+      
+      // Transatlantic routes
+      'LHR-JFK': 450, 'JFK-LHR': 450,
+      'LGW-JFK': 450, 'JFK-LGW': 450,
+      'LHR-LAX': 470, 'LAX-LHR': 470,
+      'LHR-BOS': 440, 'BOS-LHR': 440,
+      
+      // Other major routes
+      'LHR-SYD': 820, 'SYD-LHR': 820,
+      'LHR-DXB': 370, 'DXB-LHR': 370,
+      'LHR-ACC': 470, 'ACC-LHR': 470,
+      'JFK-ACC': 670, 'ACC-JFK': 670
+    };
+
+    const routeKey = `${origin}-${destination}`;
+    return routes[routeKey] || 220; // Default price for unknown routes
+  }
+
+  /**
+   * Get average price for a route
+   */
+  static async getAveragePrice(params: SkyscannerSearchParams): Promise<number | null> {
+    const flights = await this.searchFlights(params);
+    if (flights.length === 0) return null;
+    
+    const totalPrice = flights.reduce((sum, flight) => sum + flight.price.amount, 0);
+    return Math.round(totalPrice / flights.length);
+  }
+
+  /**
+   * Get price statistics for a route
+   */
+  static async getPriceStatistics(params: SkyscannerSearchParams): Promise<{
+    average: number;
+    min: number;
+    max: number;
+    count: number;
+    currency: string;
+  } | null> {
+    const flights = await this.searchFlights(params);
+    if (flights.length === 0) return null;
+    
+    const prices = flights.map(flight => flight.price.amount);
+    const totalPrice = prices.reduce((sum, price) => sum + price, 0);
+    
+    return {
+      average: Math.round(totalPrice / prices.length),
+      min: Math.min(...prices),
+      max: Math.max(...prices),
+      count: prices.length,
+      currency: params.currency
+    };
   }
 }

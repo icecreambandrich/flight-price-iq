@@ -70,8 +70,8 @@ export default function PricePredictionCard({ prediction, route, departureDate, 
     } catch (error) {
       console.error('Error in handleSearchFlights:', error);
       
-      // Fallback to a basic Skyscanner URL if WayAway fails
-      const fallbackUrl = `https://www.skyscanner.com/transport/flights/${route.origin}/${route.destination}`;
+      // Fallback to a basic flight search URL if booking fails
+      const fallbackUrl = `https://www.google.com/flights?hl=en#flt=${route.origin}.${route.destination}.${departureDate}`;
       window.open(fallbackUrl, '_blank');
     }
   };
@@ -96,11 +96,11 @@ export default function PricePredictionCard({ prediction, route, departureDate, 
               {((prediction as any).displayPrefix || '')}{formatPrice(prediction.currentPrice)}
             </h3>
             <p className="text-blue-100">
-              {((prediction as any).isExact === false) ? 'Current from price' : 'Current best price'}
+              {((prediction as any).isExact === false) ? 'Current average price' : 'Current market price'}
             </p>
             {typeof (prediction as any).minToday === 'number' && typeof (prediction as any).maxToday === 'number' && (
               <p className="text-blue-100 text-xs mt-1">
-                Typical range today: {formatPrice((prediction as any).minToday)} – {formatPrice((prediction as any).maxToday)}
+                Price range today: {formatPrice((prediction as any).minToday)} – {formatPrice((prediction as any).maxToday)}
               </p>
             )}
           </div>

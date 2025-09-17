@@ -16,6 +16,8 @@ export interface AviasalesFlightOffer {
   duration: number;
   transfers: number;
   link: string;
+  recencyWeight?: number;
+  foundAt?: string;
 }
 
 export interface AviasalesSearchParams {
@@ -33,7 +35,7 @@ export class AviasalesService {
   private static readonly BASE_URL = 'https://api.travelpayouts.com';
 
   /**
-   * Search for flights using Aviasales API
+   * Search for flights using Flight Data API (cached data)
    */
   static async searchFlights(params: AviasalesSearchParams): Promise<AviasalesFlightOffer[]> {
     console.log('AviasalesService.searchFlights called with:', params);
@@ -46,46 +48,86 @@ export class AviasalesService {
     }
 
     try {
-      // Use the month-matrix endpoint which returns real price data
-      const departureDate = new Date(params.departure_date);
-      const monthStr = `${departureDate.getFullYear()}-${String(departureDate.getMonth() + 1).padStart(2, '0')}`;
+      // Use Flight Data API endpoints for cached data
+      const flights: AviasalesFlightOffer[] = [];
       
       // Convert airport codes to city codes (Travel Payouts uses city codes)
       const originCity = this.convertAirportToCity(params.origin);
       const destinationCity = this.convertAirportToCity(params.destination);
       
-      const monthParams = new URLSearchParams({
+      // Try multiple Flight Data API endpoints to get comprehensive data
+      
+      // 1. Latest prices endpoint
+      const latestParams = new URLSearchParams({
         origin: originCity,
         destination: destinationCity,
-        month: monthStr,
         currency: params.currency,
         token: this.API_KEY
       });
-
-      console.log('Calling Travel Payouts Month Matrix API:', `${this.BASE_URL}/v2/prices/month-matrix?${monthParams.toString()}`);
       
-      const monthResponse = await fetch(`${this.BASE_URL}/v2/prices/month-matrix?${monthParams.toString()}`, {
+      if (params.departure_date) {
+        latestParams.set('depart_date', params.departure_date);
+      }
+      if (params.return_date) {
+        latestParams.set('return_date', params.return_date);
+      }
+
+      console.log('Calling Travel Payouts Latest Prices API:', `${this.BASE_URL}/v1/prices/latest?${latestParams.toString()}`);
+      
+      const latestResponse = await fetch(`${this.BASE_URL}/v1/prices/latest?${latestParams.toString()}`, {
         method: 'GET',
         headers: { 'Accept': 'application/json' }
       });
 
-      console.log('Month Matrix API response status:', monthResponse.status);
-      
-      if (monthResponse.ok) {
-        const monthData = await monthResponse.json();
-        console.log('Month Matrix API response received, items:', Array.isArray(monthData?.data) ? monthData.data.length : 0);
+      if (latestResponse.ok) {
+        const latestData = await latestResponse.json();
+        console.log('Latest Prices API response received, success:', latestData.success);
         
-        if (monthData.data && monthData.data.length > 0) {
-          // Parse the real flight data
-          return this.parseMonthMatrixResponse(monthData, params);
+        if (latestData.success && latestData.data) {
+          const parsedFlights = this.parseLatestPricesResponse(latestData, params);
+          flights.push(...parsedFlights);
         }
       }
+      
+      // 2. If we don't have enough data, try month matrix for more prices
+      if (flights.length < 5) {
+        const departureDate = new Date(params.departure_date);
+        const monthStr = `${departureDate.getFullYear()}-${String(departureDate.getMonth() + 1).padStart(2, '0')}`;
+        
+        const monthParams = new URLSearchParams({
+          origin: originCity,
+          destination: destinationCity,
+          month: monthStr,
+          currency: params.currency,
+          token: this.API_KEY
+        });
 
-      console.log('Travel Payouts API returned no data, falling back to mock data');
-      throw new Error('No flight data available from Travel Payouts API');
+        console.log('Calling Travel Payouts Month Matrix API for additional data:', `${this.BASE_URL}/v2/prices/month-matrix?${monthParams.toString()}`);
+        
+        const monthResponse = await fetch(`${this.BASE_URL}/v2/prices/month-matrix?${monthParams.toString()}`, {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' }
+        });
+
+        if (monthResponse.ok) {
+          const monthData = await monthResponse.json();
+          if (monthData.data && monthData.data.length > 0) {
+            const monthFlights = this.parseMonthMatrixResponse(monthData, params);
+            flights.push(...monthFlights);
+          }
+        }
+      }
+      
+      if (flights.length > 0) {
+        console.log(`Successfully retrieved ${flights.length} flights from Flight Data API`);
+        return flights.slice(0, 10); // Limit to 10 for consistency
+      }
+
+      console.log('Travel Payouts Flight Data API returned no data, falling back to mock data');
+      throw new Error('No flight data available from Travel Payouts Flight Data API');
 
     } catch (error) {
-      console.error('Aviasales API error:', error);
+      console.error('Aviasales Flight Data API error:', error);
       console.log('Falling back to mock data due to API error');
       return this.generateMockAviasalesData(params);
     }
@@ -132,6 +174,46 @@ export class AviasalesService {
   }
 
   /**
+   * Parse Travel Payouts latest prices response
+   */
+  static parseLatestPricesResponse(data: any, params: AviasalesSearchParams): AviasalesFlightOffer[] {
+    if (!data || !data.data) {
+      return [];
+    }
+
+    const flights: AviasalesFlightOffer[] = [];
+    const responseData = Array.isArray(data.data) ? data.data : Object.values(data.data);
+    
+    responseData.forEach((item: any, index: number) => {
+      if (item && (item.value || item.price)) {
+        // Calculate recency weight based on found_at timestamp or depart_date
+        const recencyWeight = this.calculateRecencyWeight(item.found_at || item.depart_date);
+        
+        flights.push({
+          id: `latest-${index}`,
+          price: {
+            amount: item.value || item.price,
+            currency: params.currency
+          },
+          origin: params.origin,
+          destination: params.destination,
+          departure_date: item.depart_date || params.departure_date,
+          return_date: item.return_date || params.return_date,
+          airline: item.airline || item.gate || 'Multiple Airlines',
+          flight_number: 'Various',
+          duration: item.duration || 480,
+          transfers: item.number_of_changes || 0,
+          link: this.generateBookingUrl(params),
+          recencyWeight: recencyWeight,
+          foundAt: item.found_at
+        });
+      }
+    });
+
+    return flights;
+  }
+
+  /**
    * Parse Travel Payouts month matrix response
    */
   static parseMonthMatrixResponse(data: any, params: AviasalesSearchParams): AviasalesFlightOffer[] {
@@ -142,23 +224,19 @@ export class AviasalesService {
     const flights: AviasalesFlightOffer[] = [];
     
     // Prefer exact departure date matches; fall back to cheapest within month
-    const targetDate = new Date(params.departure_date);
-    const targetStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
-
-    const items: any[] = data.data;
-    const exactMatches = items.filter((i: any) => i?.depart_date === targetStr);
-
-    const basisArray = exactMatches.length > 0 ? exactMatches : items;
-    // Sort deterministically by price then date
-    const sortedFlights = basisArray
-      .slice()
-      .sort((a: any, b: any) => (a.value - b.value) || (a.depart_date || '').localeCompare(b.depart_date || ''));
-    const topFlights = sortedFlights.slice(0, 5); // Take top 5 cheapest flights
+    const exactMatches = data.data.filter((item: any) => 
+      item.depart_date === params.departure_date
+    );
     
-    topFlights.forEach((item: any, index: number) => {
+    const itemsToProcess = exactMatches.length > 0 ? exactMatches : data.data;
+    
+    itemsToProcess.forEach((item: any, index: number) => {
       if (item && item.value) {
+        // Calculate recency weight based on found_at timestamp or depart_date proximity
+        const recencyWeight = this.calculateRecencyWeight(item.found_at || item.depart_date);
+        
         flights.push({
-          id: `travelpayouts-${index}`,
+          id: `month-${index}`,
           price: {
             amount: item.value,
             currency: params.currency
@@ -167,11 +245,13 @@ export class AviasalesService {
           destination: params.destination,
           departure_date: item.depart_date || params.departure_date,
           return_date: item.return_date || params.return_date,
-          airline: item.gate || 'Multiple Airlines',
+          airline: item.airline || 'Multiple Airlines',
           flight_number: 'Various',
-          duration: item.duration || 480, // Default 8 hours for transatlantic
+          duration: item.duration || 480,
           transfers: item.number_of_changes || 0,
-          link: this.generateBookingUrl(params)
+          link: this.generateBookingUrl(params),
+          recencyWeight: recencyWeight,
+          foundAt: item.found_at
         });
       }
     });
@@ -180,8 +260,7 @@ export class AviasalesService {
   }
 
   /**
-   * Get exact-date price (or a small range) and optionally enforce direct flights.
-   * For round trips, sums both legs using exact dates where possible.
+   * Get price range using Flight Data API endpoints
    */
   static async getExactOrRangePrice(
     params: AviasalesSearchParams & { directOnly?: boolean }
@@ -194,177 +273,65 @@ export class AviasalesService {
     basis: 'exact' | 'month';
   } | null> {
     if (!this.API_KEY) return null;
-    // Try both city-level and airport-level codes
-    const codeVariants = [
-      { o: params.origin, d: params.destination },
-      { o: this.convertAirportToCity(params.origin), d: this.convertAirportToCity(params.destination) },
-    ];
-
-    const fetchLeg = async (orig: string, dest: string, dateISO: string) => {
-      const d = new Date(dateISO);
-      const monthStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      const qs = new URLSearchParams({
-        origin: orig,
-        destination: dest,
-        month: monthStr,
-        currency: params.currency,
-        token: this.API_KEY as string,
-      });
-      const url = `${this.BASE_URL}/v2/prices/month-matrix?${qs.toString()}`;
-      const res = await fetch(url, { headers: { Accept: 'application/json' } });
-      if (!res.ok) return null;
-      const json = await res.json();
-      if (!json?.data || !Array.isArray(json.data) || json.data.length === 0) return null;
-
-      const target = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      const directFilter = (i: any) => (params.directOnly ? (i?.number_of_changes ?? 0) === 0 : true);
-      const exactItems = json.data.filter((i: any) => i?.depart_date === target && directFilter(i));
-      const pool = exactItems.length > 0 ? exactItems : json.data.filter(directFilter);
-      if (pool.length === 0) return null;
-      const sorted = pool
-        .slice()
-        .sort((a: any, b: any) => (a.value - b.value) || (a.depart_date || '').localeCompare(b.depart_date || ''));
-      const best = sorted[0].value as number;
-      const isExact = exactItems.length > 0;
-      const min = Math.min(...pool.map((x: any) => x.value as number));
-      const max = Math.max(...pool.map((x: any) => x.value as number));
-      return { best, isExact, min, max } as { best: number; isExact: boolean; min: number; max: number };
-    };
-
-    // Try each variant until we get data
-    let out: { best: number; isExact: boolean; min: number; max: number } | null = null;
-    for (const v of codeVariants) {
-      out = await fetchLeg(v.o, v.d, params.departure_date);
-      if (out) break;
-    }
-    if (!out) return null;
-    if (!params.return_date) {
+    
+    try {
+      // Use Flight Data API to get cached price data
+      const flights = await this.searchFlights(params);
+      
+      if (flights.length === 0) return null;
+      
+      const prices = flights.map(f => f.price.amount);
+      const best = Math.min(...prices);
+      const min = Math.min(...prices);
+      const max = Math.max(...prices);
+      
+      // Flight Data API provides cached data, so it's not "exact" real-time
       return {
-        best: out.best,
+        best,
         currency: params.currency,
-        isExact: out.isExact,
-        min: out.isExact ? undefined : out.min,
-        max: out.isExact ? undefined : out.max,
-        basis: out.isExact ? 'exact' : 'month',
+        isExact: false, // Cached data is not real-time exact
+        min,
+        max,
+        basis: 'month'
       };
+    } catch (error) {
+      console.error('Error getting price range from Flight Data API:', error);
+      return null;
     }
-
-    let back: { best: number; isExact: boolean; min: number; max: number } | null = null;
-    for (const v of codeVariants) {
-      back = await fetchLeg(v.d, v.o, params.return_date);
-      if (back) break;
-    }
-    if (!back) {
-      return {
-        best: out.best,
-        currency: params.currency,
-        isExact: out.isExact,
-        min: out.isExact ? undefined : out.min,
-        max: out.isExact ? undefined : out.max,
-        basis: out.isExact ? 'exact' : 'month',
-      };
-    }
-
-    const isExact = out.isExact && back.isExact;
-    return {
-      best: out.best + back.best,
-      currency: params.currency,
-      isExact,
-      min: isExact ? undefined : (out.min + back.min),
-      max: isExact ? undefined : (out.max + back.max),
-      basis: isExact ? 'exact' : 'month',
-    };
   }
 
   /**
-   * Get exact price for the specified dates using Travel Payouts 'v2/prices/cheap'.
-   * This tends to mirror Aviasales landing page "from" prices for the exact date pair.
+   * Get best price using Flight Data API
    */
   static async getExactPriceForDates(
     params: AviasalesSearchParams & { directOnly?: boolean }
   ): Promise<{ price: number; currency: string; isExact: boolean } | null> {
     if (!this.API_KEY) return null;
 
-    // Try both airport and city codes to match Aviasales better
-    const codeVariants = [
-      { origin: params.origin, destination: params.destination },
-      { origin: this.convertAirportToCity(params.origin), destination: this.convertAirportToCity(params.destination) },
-    ];
-
-    const buildUrl = (version: 'v3' | 'v2', o: string, d: string) => {
-      const qs = new URLSearchParams({
-        origin: o,
-        destination: d,
+    try {
+      // Use Flight Data API to get cached price data
+      const flights = await this.searchFlights(params);
+      
+      if (flights.length === 0) return null;
+      
+      // Filter for direct flights if requested
+      const filteredFlights = params.directOnly 
+        ? flights.filter(f => f.transfers === 0)
+        : flights;
+      
+      if (filteredFlights.length === 0) return null;
+      
+      const bestPrice = Math.min(...filteredFlights.map(f => f.price.amount));
+      
+      return {
+        price: bestPrice,
         currency: params.currency,
-        token: this.API_KEY as string,
-        depart_date: params.departure_date,
-      });
-      if (params.return_date) qs.set('return_date', params.return_date);
-      return `${this.BASE_URL}/${version}/prices/cheap?${qs.toString()}`;
-    };
-
-    const flatten = (json: any): any[] => {
-      const items: any[] = [];
-      const pushItem = (i: any) => { if (i) items.push(i); };
-      if (!json) return items;
-      const data = json.data;
-      if (Array.isArray(data)) {
-        data.forEach(pushItem);
-      } else if (data && typeof data === 'object') {
-        for (const k of Object.keys(data)) {
-          const v = data[k];
-          if (Array.isArray(v)) v.forEach(pushItem);
-          else if (v && typeof v === 'object') {
-            for (const kk of Object.keys(v)) pushItem(v[kk]);
-          }
-        }
-      }
-      return items;
-    };
-
-    const tryVersion = async (version: 'v3' | 'v2', o: string, d: string) => {
-      const url = buildUrl(version, o, d);
-      const res = await fetch(url, { headers: { Accept: 'application/json' } });
-      if (!res.ok) return null;
-      const json = await res.json();
-      const items = flatten(json);
-      if (items.length === 0) return null;
-
-      const depStr = params.departure_date;
-      const retStr = params.return_date;
-      const directOnly = !!params.directOnly;
-      const getDep = (i: any) => (i.depart_date || i.departure_at || i.depart_at || '').toString();
-      const getRet = (i: any) => (i.return_date || i.return_at || '').toString();
-      const getTransfers = (i: any) => (i.transfers ?? i.number_of_changes ?? 0);
-      const getValue = (i: any) => (i.value ?? i.price ?? i.amount ?? i.best_price ?? (i.conversion ? (i.conversion[params.currency] || i.conversion.GBP || i.conversion.USD) : undefined));
-
-      const exactMatches = items.filter(i => {
-        const okDep = depStr ? getDep(i).includes(depStr) : true;
-        const okRet = retStr ? getRet(i).includes(retStr) : true;
-        const okDir = directOnly ? getTransfers(i) === 0 : true;
-        const val = getValue(i);
-        return okDep && okRet && okDir && typeof val === 'number';
-      });
-      const pool = exactMatches.length > 0 ? exactMatches : items.filter(i => {
-        const okDir = directOnly ? getTransfers(i) === 0 : true;
-        const val = getValue(i);
-        return okDir && typeof val === 'number';
-      });
-      if (pool.length === 0) return null;
-      const best = pool.slice().sort((a, b) => (getValue(a) as number) - (getValue(b) as number))[0];
-      const price = getValue(best) as number;
-      const isExact = exactMatches.length > 0;
-      return { price, currency: params.currency, isExact } as { price: number; currency: string; isExact: boolean };
-    };
-
-    // Try v3 then v2 across code variants
-    for (const variant of codeVariants) {
-      const v3 = await tryVersion('v3', variant.origin, variant.destination);
-      if (v3) return v3;
-      const v2 = await tryVersion('v2', variant.origin, variant.destination);
-      if (v2) return v2;
+        isExact: false // Flight Data API provides cached data, not real-time exact prices
+      };
+    } catch (error) {
+      console.error('Error getting best price from Flight Data API:', error);
+      return null;
     }
-    return null;
   }
 
   /**
@@ -439,12 +406,12 @@ export class AviasalesService {
     const basePrice = this.calculateBasePrice(params.origin, params.destination);
     const mockFlights: AviasalesFlightOffer[] = [];
 
-    // Generate deterministic flight options with fixed price variations
-    const priceVariations = [1.0, 1.05, 1.12, 1.18, 1.25]; // Fixed variations: base, +5%, +12%, +18%, +25%
-    const airlines = ['Air Europa', 'British Airways', 'Virgin Atlantic', 'JetBlue Airways', 'American Airlines'];
-    const flightNumbers = ['UX', 'BA', 'VS', 'B6', 'AA'];
+    // Generate more flight options with realistic price distribution for better averages
+    const priceVariations = [1.0, 1.05, 1.12, 1.18, 1.25, 1.32, 1.40, 1.48, 1.55, 1.65]; // More price points
+    const airlines = ['Air Europa', 'British Airways', 'Virgin Atlantic', 'JetBlue Airways', 'American Airlines', 'Lufthansa', 'Air France', 'KLM', 'Turkish Airlines', 'Emirates'];
+    const flightNumbers = ['UX', 'BA', 'VS', 'B6', 'AA', 'LH', 'AF', 'KL', 'TK', 'EK'];
     
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 10; i++) {
       const price = Math.round(basePrice * priceVariations[i]);
       
       mockFlights.push({
@@ -460,7 +427,7 @@ export class AviasalesService {
         airline: airlines[i],
         flight_number: `${flightNumbers[i]}${1000 + i * 100}`,
         duration: 480 + (i * 30), // 8+ hours for transatlantic
-        transfers: i > 2 ? 1 : 0, // First 3 are direct, last 2 have stops
+        transfers: i > 5 ? 1 : 0, // First 6 are direct, last 4 have stops
         link: this.generateBookingUrl(params)
       });
     }
@@ -512,10 +479,99 @@ export class AviasalesService {
   }
 
   /**
-   * Get cheapest price for a route
+   * Calculate recency weight for cached flight data
+   * More recent data gets higher weight (1.0 to 3.0)
    */
-  static async getCheapestPrice(params: AviasalesSearchParams): Promise<number | null> {
+  static calculateRecencyWeight(timestamp: string | undefined): number {
+    if (!timestamp) return 1.0; // Default weight for data without timestamp
+    
+    try {
+      const dataDate = new Date(timestamp);
+      const now = new Date();
+      const daysDiff = (now.getTime() - dataDate.getTime()) / (1000 * 60 * 60 * 24);
+      
+      // Weight based on recency:
+      // 0-1 days: 3.0x weight (very recent)
+      // 1-7 days: 2.0x weight (recent)
+      // 7-30 days: 1.5x weight (somewhat recent)
+      // 30+ days: 1.0x weight (old data)
+      
+      if (daysDiff <= 1) return 3.0;
+      if (daysDiff <= 7) return 2.0;
+      if (daysDiff <= 30) return 1.5;
+      return 1.0;
+    } catch (error) {
+      return 1.0; // Default weight if timestamp parsing fails
+    }
+  }
+
+  /**
+   * Get weighted average price from multiple flight offers
+   * Recent data is weighted more heavily
+   */
+  static async getAveragePrice(params: AviasalesSearchParams): Promise<number | null> {
     const flights = await this.searchFlights(params);
-    return flights.length > 0 ? Math.min(...flights.map(flight => flight.price.amount)) : null;
+    if (flights.length === 0) return null;
+    
+    // Calculate weighted average
+    let totalWeightedPrice = 0;
+    let totalWeight = 0;
+    
+    flights.forEach(flight => {
+      const weight = flight.recencyWeight || 1.0;
+      totalWeightedPrice += flight.price.amount * weight;
+      totalWeight += weight;
+    });
+    
+    const weightedAverage = totalWeightedPrice / totalWeight;
+    
+    console.log(`Weighted average calculation: ${flights.length} flights, weighted avg: £${Math.round(weightedAverage)}`);
+    
+    return Math.round(weightedAverage);
+  }
+
+  /**
+   * Get weighted price statistics from multiple flight offers
+   */
+  static async getPriceStatistics(params: AviasalesSearchParams): Promise<{
+    min: number;
+    max: number;
+    average: number;
+    weightedAverage: number;
+    count: number;
+    recentDataPoints: number;
+  } | null> {
+    const flights = await this.searchFlights(params);
+    if (flights.length === 0) return null;
+    
+    const prices = flights.map(flight => flight.price.amount);
+    
+    // Calculate simple average
+    const simpleAverage = prices.reduce((sum, price) => sum + price, 0) / prices.length;
+    
+    // Calculate weighted average
+    let totalWeightedPrice = 0;
+    let totalWeight = 0;
+    let recentDataPoints = 0;
+    
+    flights.forEach(flight => {
+      const weight = flight.recencyWeight || 1.0;
+      totalWeightedPrice += flight.price.amount * weight;
+      totalWeight += weight;
+      
+      // Count recent data points (weight > 1.5)
+      if (weight > 1.5) recentDataPoints++;
+    });
+    
+    const weightedAverage = totalWeightedPrice / totalWeight;
+    
+    return {
+      min: Math.min(...prices),
+      max: Math.max(...prices),
+      average: Math.round(simpleAverage),
+      weightedAverage: Math.round(weightedAverage),
+      count: flights.length,
+      recentDataPoints
+    };
   }
 }

@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { StatisticalValidator } from '@/lib/statistical-validator';
 import { ABTestingFramework } from '@/lib/ab-testing';
 import { AmadeusService } from '@/lib/amadeus';
-import { SkyscannerService } from '@/lib/skyscanner';
-import { AviasalesService } from '@/lib/aviasales';
+import { FlightPriceAggregator } from '@/lib/flight-aggregator';
 
 export async function POST(request: NextRequest) {
   try {
@@ -87,126 +86,52 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Try to get real Aviasales prices first, then fallback to Skyscanner, then Amadeus
+    // Use the new Flight Price Aggregator for average pricing
     let currentPrice = 400; // Default fallback
-    // Hints for UI display
-    let isExact: boolean = true;
-    let basis: 'exact' | 'month' = 'exact';
+    let isExact: boolean = false; // Average prices are not exact
     let minToday: number | undefined;
     let maxToday: number | undefined;
     
     try {
-      // Search using Aviasales API for real prices (primary) with exact-date or range logic
-      const aviasalesParams = {
+      // Get comprehensive flight analysis with average pricing
+      const flightAnalysis = await FlightPriceAggregator.getFlightAnalysis({
         origin,
         destination,
-        departure_date: departureDate,
-        return_date: returnDate,
-        currency: 'GBP'
-      } as const;
-
-      // 1) Try 'cheap' endpoint first (closer to Aviasales landing page exact day)
-      const cheap = await AviasalesService.getExactPriceForDates({
-        ...aviasalesParams,
-        directOnly: !!directFlightsOnly,
+        departureDate,
+        returnDate,
+        currency: 'GBP',
+        directOnly: !!directFlightsOnly
       });
 
-      if (cheap && cheap.price > 0) {
-        currentPrice = cheap.price;
-        isExact = cheap.isExact;
-        basis = cheap.isExact ? 'exact' : 'month';
-        console.log(`Using Aviasales CHEAP ${isExact ? 'exact' : 'from'} price: £${currentPrice}`);
+      if (flightAnalysis) {
+        currentPrice = flightAnalysis.pricing.averagePrice;
+        minToday = flightAnalysis.pricing.minPrice;
+        maxToday = flightAnalysis.pricing.maxPrice;
+        isExact = false; // This is an average, not exact
+        console.log(`Using aggregated average price: £${currentPrice} (from ${flightAnalysis.pricing.sources.join(', ')})`);
+        console.log(`Price range: £${minToday} - £${maxToday} (${flightAnalysis.pricing.priceCount} data points)`);
       } else {
-        // 2) Fallback to month-matrix exact-or-range
-        const exactOrRange = await AviasalesService.getExactOrRangePrice({
-          ...aviasalesParams,
-          directOnly: !!directFlightsOnly,
-        });
+        // Fallback to Amadeus if aggregator fails
+        const amadeusParams = {
+          originLocationCode: origin,
+          destinationLocationCode: destination,
+          departureDate,
+          returnDate,
+          adults: passengers || 1,
+          currencyCode: 'GBP',
+          max: 10,
+          nonStop: directFlightsOnly || false
+        };
 
-        if (exactOrRange && exactOrRange.best > 0) {
-          currentPrice = exactOrRange.best;
-          isExact = exactOrRange.isExact;
-          basis = exactOrRange.basis;
-          minToday = exactOrRange.min;
-          maxToday = exactOrRange.max;
-          console.log(`Using Aviasales MONTH-MATRIX ${isExact ? 'exact' : 'from'} price: £${currentPrice}`);
-        } else {
-          // 3) Fallback to Skyscanner
-          const skyscannerParams = {
-            originSkyId: SkyscannerService.getSkySkyId(origin),
-            destinationSkyId: SkyscannerService.getSkySkyId(destination),
-            originEntityId: SkyscannerService.getEntityId(origin),
-            destinationEntityId: SkyscannerService.getEntityId(destination),
-            departureDate,
-            returnDate,
-            cabinClass: 'economy' as const,
-            adults: passengers || 1,
-            sortBy: 'best' as const,
-            currency: 'GBP',
-            market: 'UK',
-            countryCode: 'GB'
-          };
-
-          const skyscannerOffers = await SkyscannerService.searchFlights(skyscannerParams);
-          
-          if (skyscannerOffers.length > 0) {
-            currentPrice = skyscannerOffers[0].price.amount;
-            console.log(`Using Skyscanner price: £${currentPrice}`);
-          } else {
-            // 4) Final fallback to Amadeus
-            const amadeusParams = {
-              originLocationCode: origin,
-              destinationLocationCode: destination,
-              departureDate,
-              returnDate,
-              adults: passengers || 1,
-              currencyCode: 'GBP',
-              max: 10,
-              nonStop: directFlightsOnly || false
-            };
-
-            const flightOffers = await AmadeusService.searchFlights(amadeusParams);
-            currentPrice = flightOffers.length > 0 
-              ? parseFloat(flightOffers[0].price.total)
-              : 400;
-            console.log(`Using Amadeus/mock price: £${currentPrice}`);
-          }
-        }
-      }
-      // 2.5) Parity assist: some Aviasales roundtrip tiles reflect two one-ways summed.
-      // Compute sum of one-ways and take it if it's lower than currentPrice.
-      try {
-        const outOneWay = await AviasalesService.getExactPriceForDates({
-          origin,
-          destination,
-          departure_date: departureDate,
-          currency: 'GBP',
-          directOnly: !!directFlightsOnly,
-        } as any);
-        const inOneWay = returnDate ? await AviasalesService.getExactPriceForDates({
-          origin: destination,
-          destination: origin,
-          departure_date: returnDate,
-          currency: 'GBP',
-          directOnly: !!directFlightsOnly,
-        } as any) : null;
-        if (outOneWay && (!returnDate || inOneWay)) {
-          const sum = outOneWay.price + (inOneWay ? inOneWay.price : 0);
-          if (sum > 0 && sum < currentPrice) {
-            currentPrice = sum;
-            isExact = !!(outOneWay.isExact && (inOneWay ? inOneWay.isExact : true));
-            basis = 'exact';
-            minToday = undefined;
-            maxToday = undefined;
-            console.log(`Using Aviasales SUM-OF-ONE-WAYS price: £${currentPrice}`);
-          }
-        }
-      } catch (e) {
-        console.log('Sum-of-one-ways parity step skipped:', e);
+        const flightOffers = await AmadeusService.searchFlights(amadeusParams);
+        currentPrice = flightOffers.length > 0 
+          ? parseFloat(flightOffers[0].price.total)
+          : 400;
+        console.log(`Using Amadeus fallback price: £${currentPrice}`);
       }
 
     } catch (error) {
-      console.error('Error fetching flight prices:', error);
+      console.error('Error fetching aggregated flight prices:', error);
       currentPrice = 400; // Use fallback price
     }
 
@@ -234,11 +159,11 @@ export async function POST(request: NextRequest) {
         average: Math.floor(currentPrice)
       },
       // Display hints for UI
-      isExact: typeof isExact !== 'undefined' ? isExact : true,
-      basis: (typeof basis !== 'undefined' ? basis : 'exact') as 'exact' | 'month',
+      isExact: false, // Always false for average prices
+      basis: 'month' as 'exact' | 'month',
       minToday,
       maxToday,
-      displayPrefix: (typeof isExact !== 'undefined' && !isExact) ? 'From ' : '',
+      displayPrefix: 'avg. ', // Indicate this is an average price
       validatedConfidence: 85,
       statisticalConfidence: {
         sampleSize: 300,
